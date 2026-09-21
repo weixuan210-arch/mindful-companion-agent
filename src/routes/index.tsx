@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 
 import billy from "@/assets/billy.png";
+import { DriveCard } from "@/components/billy/DriveCard";
 import { MoodCard } from "@/components/billy/MoodCard";
 import { NudgeCard } from "@/components/billy/NudgeCard";
 import { TaskList } from "@/components/billy/TaskList";
@@ -199,6 +200,7 @@ function Companion({ userId }: { userId: string }) {
         <aside className="flex flex-col gap-5">
           <MoodCard mood={mood} signals={signals} threshold={threshold} />
           <TaskList tasks={tasks} threshold={threshold} onToggle={toggleTask} />
+          <DriveCard userId={userId} />
         </aside>
       </div>
     </main>
