@@ -21,7 +21,7 @@ export async function mirrorToDrive(
 
     const name = `billy-${kind}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`;
     const metadata: Record<string, unknown> = { name, mimeType: "text/plain" };
-    if (connection.folderId) metadata.parents = [connection.folderId];
+    if (connection.folderId) metadata["parents"] = [connection.folderId];
 
     const boundary = `billy${Math.random().toString(36).slice(2)}`;
     const multipart =
