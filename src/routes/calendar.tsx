@@ -145,15 +145,10 @@ function CalendarView({ userId }: { userId: string }) {
       );
 
       // Billy's mood as the day closed — or right now, for today.
-      const mood = isPast
-        ? computeMood(
-            computeSignals(
-              taskStateAt(tasks, Math.min(endOfDay, Date.now())),
-              threshold,
-              Math.min(endOfDay, Date.now()),
-            ),
-          ).key
-        : null;
+      const at = Math.min(endOfDay, Date.now());
+      const state = isPast ? taskStateAt(tasks, at) : [];
+      const mood =
+        state.length > 0 ? computeMood(computeSignals(state, threshold, at)).key : null;
 
       cells.push({
         key: dayKey,
