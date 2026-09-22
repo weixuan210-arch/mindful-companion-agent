@@ -68,6 +68,14 @@ const TOOL_TITLES: Record<string, string> = {
   "tool-list_tasks": "Checking your list",
 };
 
+// Billy's quiet acknowledgment when a task is ticked off — honest, never gushing.
+const DONE_LINES = [
+  "That's done. One less thing carrying weight.",
+  "Off the list — and off your mind.",
+  "Good. Notice how that feels for a moment.",
+  "That one's closed. The list is a little lighter.",
+];
+
 function Index() {
   const { session, loading } = useSession();
   const navigate = useNavigate();
