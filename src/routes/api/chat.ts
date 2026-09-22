@@ -114,7 +114,8 @@ export const Route = createFileRoute("/api/chat")({
               },
             }),
             create_task: tool({
-              description: "Add something they need to do to their task list.",
+              description:
+                "Add something they need to do to their task list. File it under a project when one clearly fits.",
               inputSchema: z.object({
                 title: z.string().describe("Short task title."),
                 details: z.string().nullable().describe("Extra context, or null."),
@@ -122,8 +123,14 @@ export const Route = createFileRoute("/api/chat")({
                   .string()
                   .nullable()
                   .describe("Due date as YYYY-MM-DD, or null if no date was given."),
+                project_id: z
+                  .string()
+                  .nullable()
+                  .describe(
+                    "Id of an existing project this clearly belongs to, or null to leave it unsorted.",
+                  ),
               }),
-              execute: async ({ title, details, due_at }) => {
+              execute: async ({ title, details, due_at, project_id }) => {
                 const { data, error } = await ctx.supabase
                   .from("tasks")
                   .insert({
@@ -131,14 +138,94 @@ export const Route = createFileRoute("/api/chat")({
                     title,
                     details,
                     due_at: due_at ? new Date(`${due_at}T12:00:00Z`).toISOString() : null,
+                    project_id,
                   })
                   .select("id")
                   .single();
                 if (error) return { created: false, error: error.message };
                 await mirrorToDrive(ctx, "task", data.id, `${title}\n\n${details ?? ""}`);
-                return { created: true, id: data.id };
+                return { created: true, id: data.id, project_id };
               },
             }),
+            list_projects: tool({
+              description:
+                "List their projects with how many open tasks each holds, plus how many tasks are unsorted.",
+              inputSchema: z.object({}),
+              execute: async () => {
+                const [{ data: projects, error }, { data: tasks }] = await Promise.all([
+                  ctx.supabase
+                    .from("projects")
+                    .select("id, name, description")
+                    .eq("user_id", ctx.userId)
+                    .order("created_at", { ascending: true }),
+                  ctx.supabase
+                    .from("tasks")
+                    .select("id, title, project_id")
+                    .eq("user_id", ctx.userId)
+                    .eq("status", "open"),
+                ]);
+                if (error) return { error: error.message };
+                const open = tasks ?? [];
+                return {
+                  projects: (projects ?? []).map((p) => ({
+                    ...p,
+                    openTasks: open.filter((t) => t.project_id === p.id).length,
+                  })),
+                  unsorted: open
+                    .filter((t) => !t.project_id)
+                    .map((t) => ({ id: t.id, title: t.title })),
+                };
+              },
+            }),
+            create_project: tool({
+              description:
+                "Create a new project. Only call this after they have agreed to it — never invent a project silently.",
+              inputSchema: z.object({
+                name: z.string().describe("Short project name in their own words."),
+                description: z.string().nullable().describe("One line of context, or null."),
+                task_ids: z
+                  .array(z.string())
+                  .describe("Ids of existing tasks to move into it. Empty array if none."),
+              }),
+              execute: async ({ name, description, task_ids }) => {
+                const { data, error } = await ctx.supabase
+                  .from("projects")
+                  .insert({ user_id: ctx.userId, name, description })
+                  .select("id, name")
+                  .single();
+                if (error) return { created: false, error: error.message };
+                let moved = 0;
+                if (task_ids.length > 0) {
+                  const { error: moveError } = await ctx.supabase
+                    .from("tasks")
+                    .update({ project_id: data.id })
+                    .eq("user_id", ctx.userId)
+                    .in("id", task_ids);
+                  if (!moveError) moved = task_ids.length;
+                }
+                return { created: true, id: data.id, name: data.name, movedTasks: moved };
+              },
+            }),
+            assign_task_project: tool({
+              description:
+                "Put an existing task into a project, or pass null to leave it unsorted again.",
+              inputSchema: z.object({
+                task_id: z.string().describe("The task id."),
+                project_id: z
+                  .string()
+                  .nullable()
+                  .describe("The project id, or null to unsort the task."),
+              }),
+              execute: async ({ task_id, project_id }) => {
+                const { error } = await ctx.supabase
+                  .from("tasks")
+                  .update({ project_id })
+                  .eq("id", task_id)
+                  .eq("user_id", ctx.userId);
+                return error ? { assigned: false, error: error.message } : { assigned: true };
+              },
+            }),
+
             complete_task: tool({
               description: "Mark a task as done using its id from the current picture.",
               inputSchema: z.object({ id: z.string().describe("The task id.") }),
@@ -159,7 +246,7 @@ export const Route = createFileRoute("/api/chat")({
               execute: async ({ include_done }) => {
                 const query = ctx.supabase
                   .from("tasks")
-                  .select("id, title, details, due_at, status, created_at, completed_at")
+                  .select("id, title, details, due_at, status, created_at, completed_at, project_id")
                   .eq("user_id", ctx.userId)
                   .order("created_at", { ascending: true });
                 const { data, error } = include_done

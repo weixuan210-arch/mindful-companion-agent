@@ -25,25 +25,31 @@ export async function createCompanionContext(token: string): Promise<CompanionCo
 }
 
 export async function buildSnapshot(ctx: CompanionContext) {
-  const [{ data: profile }, { data: tasks }, { data: thoughts }] = await Promise.all([
-    ctx.supabase
-      .from("profiles")
-      .select("display_name, nudge_threshold_days")
-      .eq("id", ctx.userId)
-      .maybeSingle(),
-    ctx.supabase
-      .from("tasks")
-      .select("id, title, details, due_at, status, created_at, completed_at")
-      .eq("user_id", ctx.userId)
-      .order("created_at", { ascending: true })
-      .limit(200),
-    ctx.supabase
-      .from("thoughts")
-      .select("content, tags, mood, created_at")
-      .eq("user_id", ctx.userId)
-      .order("created_at", { ascending: false })
-      .limit(25),
-  ]);
+  const [{ data: profile }, { data: tasks }, { data: thoughts }, { data: projects }] =
+    await Promise.all([
+      ctx.supabase
+        .from("profiles")
+        .select("display_name, nudge_threshold_days")
+        .eq("id", ctx.userId)
+        .maybeSingle(),
+      ctx.supabase
+        .from("tasks")
+        .select("id, title, details, due_at, status, created_at, completed_at, project_id")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      ctx.supabase
+        .from("thoughts")
+        .select("content, tags, mood, created_at")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      ctx.supabase
+        .from("projects")
+        .select("id, name, description")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: true }),
+    ]);
 
   const threshold = profile?.nudge_threshold_days ?? 5;
   const signals = computeSignals((tasks ?? []) as TaskLike[], threshold);
@@ -55,11 +61,13 @@ export async function buildSnapshot(ctx: CompanionContext) {
     threshold,
     tasks: tasks ?? [],
     thoughts: thoughts ?? [],
+    projects: projects ?? [],
     signals,
     mood,
     nudge,
   };
 }
+
 
 /** YYYY-MM-DD of a moment in the user's own timezone. */
 function localDateString(date: Date, timeZone: string): string {
@@ -82,17 +90,27 @@ export function buildSystemPrompt(
   snapshot: Awaited<ReturnType<typeof buildSnapshot>>,
   timeZone: string,
 ) {
-  const { signals, mood, nudge, tasks, thoughts, threshold, displayName } = snapshot;
+  const { signals, mood, nudge, tasks, thoughts, projects, threshold, displayName } = snapshot;
   const now = new Date();
+
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
   const openTasks = tasks
     .filter((t) => t.status === "open")
     .map((t) => {
       const age = localDayDiff(new Date(t.created_at), now, timeZone);
       const due = t.due_at ? `, due ${localDateString(new Date(t.due_at), timeZone)}` : "";
-      return `- [${t.id}] ${t.title} (open ${age}d${due})`;
+      const project = t.project_id
+        ? `, project: ${projectName.get(t.project_id) ?? "unknown"}`
+        : ", unsorted";
+      return `- [${t.id}] ${t.title} (open ${age}d${due}${project})`;
     })
     .join("\n");
+
+  const projectList = projects
+    .map((p) => `- [${p.id}] ${p.name}${p.description ? ` — ${p.description}` : ""}`)
+    .join("\n");
+
 
   const recentThoughts = thoughts
     .slice(0, 12)
@@ -130,6 +148,18 @@ MEMORY
 - To remember earlier things, use recall_thoughts instead of guessing. Never invent memories.
 - Never claim to have saved something unless the tool call succeeded.
 
+PROJECTS (how tasks get sorted)
+- Every task should end up in a project when there is an obvious home for it. Projects are a flat list — no sub-projects, no areas.
+- When you create a task and one existing project clearly fits, file it there straight away (pass project_id to create_task) and mention it in a short, natural aside: "I put that under Flat move." Never ask permission when you're confident.
+- When two or more projects could fit, or the task is genuinely unlike anything they've got, ask them once — offer the likely candidates plus "leave it unsorted". Ask in plain words, not a form.
+- If a task clearly belongs to something that doesn't exist yet as a project (two or more related tasks, or they talk about it as an ongoing thing), suggest creating that project and ask for a yes before calling create_project. Never invent projects silently.
+- When they start out with no projects at all, don't push structure on them. Once there are 3+ unsorted tasks that group naturally, gently offer the grouping you see.
+- Use assign_task_project to move or unsort an existing task. Use list_projects when you need the current list.
+- Renaming, merging or deleting a project is their call, never yours to assume.
+
+THEIR PROJECTS
+${projectList || "(none yet — they haven't created any)"}
+
 CURRENT PICTURE (behavioural, refreshed each turn)
 Mood: ${mood.key} — ${mood.label}. ${mood.line}
 Open tasks: ${signals.openCount}; overdue: ${signals.overdue.length}; untouched ${threshold}+ days: ${signals.avoided.length}; completed in last 7 days: ${signals.doneRecently}.
@@ -140,6 +170,7 @@ ${openTasks || "(none)"}
 
 RECENT THOUGHTS THEY SAVED
 ${recentThoughts || "(none yet)"}
+
 
 For them it is currently ${localNow} (timezone: ${timeZone}). Interpret "today", "tomorrow", "tonight" etc. against this local time, never UTC. When recording a due date from a relative phrase, work out the calendar date in their timezone first.`;
 }

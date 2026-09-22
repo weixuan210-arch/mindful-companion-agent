@@ -58,7 +58,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Task = TaskLike & { details: string | null };
+type Task = TaskLike & { details: string | null; project_id: string | null };
 
 const TOOL_TITLES: Record<string, string> = {
   "tool-save_thought": "Keeping that",
@@ -66,7 +66,11 @@ const TOOL_TITLES: Record<string, string> = {
   "tool-create_task": "Adding to your list",
   "tool-complete_task": "Ticking that off",
   "tool-list_tasks": "Checking your list",
+  "tool-list_projects": "Looking at your projects",
+  "tool-create_project": "Starting a project",
+  "tool-assign_task_project": "Filing that away",
 };
+
 
 // Billy's quiet acknowledgment when a task is ticked off — honest, never gushing.
 const DONE_LINES = [
@@ -116,7 +120,7 @@ function Companion({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, title, details, due_at, status, created_at, completed_at")
+        .select("id, title, details, due_at, status, created_at, completed_at, project_id")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
       if (error) throw error;
@@ -124,8 +128,22 @@ function Companion({ userId }: { userId: string }) {
     },
   });
 
+  const projectsQuery = useQuery({
+    queryKey: ["projects", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, description")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
   const historyQuery = useQuery({
     queryKey: ["messages", userId],
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
@@ -174,7 +192,9 @@ function Companion({ userId }: { userId: string }) {
 
   const onTurnFinished = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
+    queryClient.invalidateQueries({ queryKey: ["projects", userId] });
   }, [queryClient, userId]);
+
 
   if (historyQuery.isLoading) {
     return (
@@ -217,7 +237,12 @@ function Companion({ userId }: { userId: string }) {
 
         <aside className="flex flex-col gap-5">
           <MoodCard mood={mood} signals={signals} threshold={threshold} />
-          <TaskList tasks={tasks} threshold={threshold} onToggle={toggleTask} />
+          <TaskList
+            tasks={tasks}
+            projects={projectsQuery.data ?? []}
+            threshold={threshold}
+            onToggle={toggleTask}
+          />
           <DriveCard userId={userId} />
         </aside>
       </div>

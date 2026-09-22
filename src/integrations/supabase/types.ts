@@ -95,6 +95,33 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           completed_at: string | null
@@ -105,6 +132,7 @@ export type Database = {
           id: string
           last_nudged_at: string | null
           nudge_count: number
+          project_id: string | null
           status: string
           title: string
           updated_at: string
@@ -119,6 +147,7 @@ export type Database = {
           id?: string
           last_nudged_at?: string | null
           nudge_count?: number
+          project_id?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -133,12 +162,21 @@ export type Database = {
           id?: string
           last_nudged_at?: string | null
           nudge_count?: number
+          project_id?: string | null
           status?: string
           title?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       thoughts: {
         Row: {
