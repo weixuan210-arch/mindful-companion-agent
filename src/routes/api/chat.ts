@@ -111,7 +111,13 @@ export const Route = createFileRoute("/api/chat")({
 
         const result = streamText({
           model: lovable.responses("openai/gpt-6-astra"),
-          system: buildSystemPrompt(snapshot, timeZone),
+          system:
+            buildSystemPrompt(snapshot, timeZone) +
+            (attachedCount > 0
+              ? filesSavedToDrive === attachedCount
+                ? `\n\nNOTE: ${attachedCount === 1 ? "The file they just shared has" : `All ${attachedCount} files they just shared have`} been saved into their Billy folder in their Google Drive.`
+                : `\n\nNOTE: ${filesSavedToDrive} of ${attachedCount} files they just shared could be saved to their Billy Drive folder — the rest could not be kept (their Drive may not be connected). Be honest about that if it comes up.`
+              : ""),
           messages: await convertToModelMessages(messagesForModel),
           stopWhen: stepCountIs(50),
           abortSignal: request.signal,
