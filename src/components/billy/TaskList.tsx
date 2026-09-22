@@ -13,22 +13,24 @@ export function TaskList({
   threshold,
   onToggle,
 }: {
-  tasks: Task[];
-  projects: Project[];
+  tasks?: Task[] | null;
+  projects?: Project[] | null;
   threshold: number;
   onToggle: (task: Task, done: boolean) => void;
 }) {
-  const open = tasks.filter((t) => t.status === "open");
-  const done = tasks.filter((t) => t.status === "done").slice(-4).reverse();
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  const projectList = Array.isArray(projects) ? projects : [];
+  const open = taskList.filter((t) => t.status === "open");
+  const done = taskList.filter((t) => t.status === "done").slice(-4).reverse();
   const now = Date.now();
 
   // Grouped by project, in the order projects were created, unsorted last.
   const groups: { key: string; label: string; items: Task[] }[] = [];
-  for (const project of projects) {
+  for (const project of projectList) {
     const items = open.filter((t) => t.project_id === project.id);
     if (items.length > 0) groups.push({ key: project.id, label: project.name, items });
   }
-  const unsorted = open.filter((t) => !t.project_id || !projects.some((p) => p.id === t.project_id));
+  const unsorted = open.filter((t) => !t.project_id || !projectList.some((p) => p.id === t.project_id));
   if (unsorted.length > 0) {
     groups.push({
       key: "unsorted",
