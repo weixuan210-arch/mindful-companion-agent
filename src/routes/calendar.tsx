@@ -133,6 +133,7 @@ function CalendarView({ userId }: { userId: string }) {
       date: Date | null;
       due: Task[];
       done: Task[];
+      events: { id: string; label: string; title: string }[];
       mood: MoodKey | null;
       isToday: boolean;
       isPast: boolean;
@@ -144,6 +145,7 @@ function CalendarView({ userId }: { userId: string }) {
         date: null,
         due: [],
         done: [],
+        events: [],
         mood: null,
         isToday: false,
         isPast: false,
@@ -161,6 +163,25 @@ function CalendarView({ userId }: { userId: string }) {
         (t) => t.completed_at && new Date(t.completed_at).toDateString() === dayKey,
       );
 
+      const dayEvents = events
+        .filter((event) => {
+          if (!event.start) return false;
+          const start = event.allDay
+            ? new Date(`${event.start}T00:00:00`)
+            : new Date(event.start);
+          return start.toDateString() === dayKey;
+        })
+        .map((event) => ({
+          id: event.id,
+          title: event.title,
+          label: event.allDay
+            ? event.title
+            : `${new Date(event.start as string).toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })} ${event.title}`,
+        }));
+
       // Billy's mood as the day closed — or right now, for today.
       const at = Math.min(endOfDay, Date.now());
       const state = isPast ? taskStateAt(tasks, at) : [];
@@ -172,6 +193,7 @@ function CalendarView({ userId }: { userId: string }) {
         date,
         due,
         done,
+        events: dayEvents,
         mood,
         isToday: dayKey === todayKey,
         isPast,
@@ -179,7 +201,8 @@ function CalendarView({ userId }: { userId: string }) {
     }
 
     return cells;
-  }, [monthStart, tasks, threshold]);
+  }, [monthStart, tasks, threshold, events]);
+
 
   const monthLabel = monthStart.toLocaleDateString(undefined, {
     month: "long",
