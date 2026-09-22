@@ -141,8 +141,9 @@ function Companion({ userId }: { userId: string }) {
     },
   });
 
-
+  const historyQuery = useQuery({
     queryKey: ["messages", userId],
+
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
