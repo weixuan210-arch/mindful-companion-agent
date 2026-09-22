@@ -427,7 +427,7 @@ function ChatPanel({
             const showBilly = message.role === "assistant" && messageIndex === latestAssistantIndex;
 
             return (
-              <Message from={message.role} key={message.id}>
+              <Message from={message.role} key={`${message.id}-${messageIndex}`}>
                 <div className={showBilly ? "flex items-start gap-3" : undefined}>
                   {showBilly && <AnimatedBilly expression={expression} />}
                   <MessageContent
