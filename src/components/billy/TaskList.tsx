@@ -1,11 +1,35 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useState } from "react";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import type { TaskLike } from "@/lib/mood";
 
 type Task = TaskLike & { details: string | null; project_id: string | null };
 type Project = { id: string; name: string };
+
+const CHEERS = ["Nice one!", "Boom.", "Got it!", "Yes!", "Tidy."];
+
+/** Confetti burst from wherever the checkbox sits. Loaded lazily, never on SSR. */
+async function celebrate(element: HTMLElement | null) {
+  const { default: confetti } = await import("canvas-confetti");
+  const rect = element?.getBoundingClientRect();
+  const origin = rect
+    ? {
+        x: (rect.left + rect.width / 2) / window.innerWidth,
+        y: (rect.top + rect.height / 2) / window.innerHeight,
+      }
+    : { x: 0.85, y: 0.4 };
+  confetti({
+    particleCount: 70,
+    spread: 70,
+    startVelocity: 32,
+    scalar: 0.85,
+    origin,
+    colors: ["#d98a4f", "#e8c07d", "#8fb77a", "#f2e4cf"],
+    disableForReducedMotion: true,
+  });
+}
 
 export function TaskList({
   tasks,
@@ -23,6 +47,21 @@ export function TaskList({
   const open = taskList.filter((t) => t.status === "open");
   const done = taskList.filter((t) => t.status === "done").slice(-4).reverse();
   const now = Date.now();
+
+  const [cheer, setCheer] = useState<{ id: string; text: string } | null>(null);
+
+  const handleToggle = useCallback(
+    (task: Task, isDone: boolean, element: HTMLElement | null) => {
+      if (isDone) {
+        void celebrate(element);
+        const text = CHEERS[Math.floor(Math.random() * CHEERS.length)]!;
+        setCheer({ id: task.id, text });
+        window.setTimeout(() => setCheer(null), 1200);
+      }
+      onToggle(task, isDone);
+    },
+    [onToggle],
+  );
 
   // Grouped by project, in the order projects were created, unsorted last.
   const groups: { key: string; label: string; items: Task[] }[] = [];
@@ -47,17 +86,23 @@ export function TaskList({
       <motion.li
         key={task.id}
         layout
-        className="flex items-start gap-3"
+        className="relative flex items-start gap-3"
         exit={{ opacity: 0, x: 16, transition: { duration: 0.25, ease: "easeIn" } }}
       >
         <motion.span
           className="mt-0.5"
-          whileTap={{ scale: 0.85 }}
+          whileTap={{ scale: 0.8 }}
           transition={{ type: "spring", stiffness: 500, damping: 15 }}
         >
           <Checkbox
             checked={false}
-            onCheckedChange={(value) => onToggle(task, value === true)}
+            onCheckedChange={(value) => {
+              const element = document.querySelector<HTMLElement>(
+                `[data-task-check="${task.id}"]`,
+              );
+              handleToggle(task, value === true, element);
+            }}
+            data-task-check={task.id}
             aria-label={`Mark ${task.title} as done`}
           />
         </motion.span>
@@ -71,6 +116,21 @@ export function TaskList({
             {stale ? " · been a while" : ""}
           </p>
         </div>
+
+        <AnimatePresence>
+          {cheer?.id === task.id && (
+            <motion.span
+              key="cheer"
+              initial={{ opacity: 0, y: 6, scale: 0.8 }}
+              animate={{ opacity: 1, y: -14, scale: 1 }}
+              exit={{ opacity: 0, y: -26 }}
+              transition={{ type: "spring", stiffness: 300, damping: 18 }}
+              className="pointer-events-none absolute right-0 top-0 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground shadow-sm"
+            >
+              {cheer.text} +1
+            </motion.span>
+          )}
+        </AnimatePresence>
       </motion.li>
     );
   };

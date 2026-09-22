@@ -211,6 +211,47 @@ export type Database = {
         }
         Relationships: []
       }
+      vault_notes: {
+        Row: {
+          created_at: string
+          id: string
+          modified_time: string | null
+          name: string
+          source_file_id: string
+          thought_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          modified_time?: string | null
+          name: string
+          source_file_id: string
+          thought_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          modified_time?: string | null
+          name?: string
+          source_file_id?: string
+          thought_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vault_notes_thought_id_fkey"
+            columns: ["thought_id"]
+            isOneToOne: false
+            referencedRelation: "thoughts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

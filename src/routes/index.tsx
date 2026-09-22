@@ -2,14 +2,16 @@ import { useChat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import billy from "@/assets/billy.png";
+import { DailyCheckIn } from "@/components/billy/DailyCheckIn";
 import { DriveCard } from "@/components/billy/DriveCard";
 import { MoodCard } from "@/components/billy/MoodCard";
 import { NudgeCard } from "@/components/billy/NudgeCard";
 import { TaskList } from "@/components/billy/TaskList";
+import { VaultCard } from "@/components/billy/VaultCard";
 import {
   Conversation,
   ConversationContent,
@@ -60,6 +62,8 @@ export const Route = createFileRoute("/")({
   }),
   component: Index,
 });
+
+const CHECK_IN_KEY = (userId: string) => `billy-checkin-${userId}`;
 
 type Task = TaskLike & { details: string | null; project_id: string | null };
 
@@ -245,11 +249,33 @@ function Companion({ userId }: { userId: string }) {
   }, [queryClient, userId]);
 
 
-  if (historyQuery.isLoading) {
+  const [checkedIn, setCheckedIn] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(CHECK_IN_KEY(userId)) === new Date().toDateString();
+  });
+
+  const startDay = useCallback(() => {
+    window.localStorage.setItem(CHECK_IN_KEY(userId), new Date().toDateString());
+    setCheckedIn(true);
+  }, [userId]);
+
+  if (historyQuery.isLoading || tasksQuery.isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
         <Shimmer>Remembering where we left off...</Shimmer>
       </main>
+    );
+  }
+
+  if (!checkedIn) {
+    return (
+      <DailyCheckIn
+        displayName={profileQuery.data?.display_name ?? null}
+        tasks={tasks}
+        signals={signals}
+        mood={mood}
+        onStart={startDay}
+      />
     );
   }
 
@@ -268,6 +294,9 @@ function Companion({ userId }: { userId: string }) {
           </div>
         </div>
         <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/calendar">Calendar</Link>
+          </Button>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/patterns">Patterns</Link>
           </Button>
@@ -293,6 +322,7 @@ function Companion({ userId }: { userId: string }) {
             onToggle={toggleTask}
           />
           <DriveCard userId={userId} />
+          <VaultCard userId={userId} />
         </aside>
       </div>
     </main>
