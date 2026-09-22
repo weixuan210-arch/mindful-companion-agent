@@ -696,7 +696,33 @@ function ChatPanel({
             placeholder="Tell Billy anything — a thought, a worry, something you need to do..."
           />
           <PromptInputFooter className="justify-between">
-            <AttachButton />
+            <div className="flex items-center gap-1">
+              <AttachButton />
+              <PromptInputButton
+                type="button"
+                aria-label={isRecording ? "Stop recording and send" : "Talk to Billy"}
+                onClick={() => void toggleRecording()}
+                disabled={isTranscribing || isBusy}
+              >
+                {isRecording ? (
+                  <Square className="h-4 w-4 text-destructive" />
+                ) : (
+                  <Mic className={isRecording ? "text-destructive" : undefined} />
+                )}
+              </PromptInputButton>
+              <PromptInputButton
+                type="button"
+                aria-label={voiceOn ? "Mute Billy's voice" : "Let Billy speak his replies"}
+                onClick={toggleVoice}
+              >
+                {voiceOn ? <Volume2 /> : <VolumeX />}
+              </PromptInputButton>
+              {isRecording ? (
+                <span className="text-xs text-destructive">Listening… tap to send</span>
+              ) : isTranscribing ? (
+                <span className="text-xs text-muted-foreground">Hearing you out…</span>
+              ) : null}
+            </div>
             <PromptInputSubmit status={status} onStop={stop} />
           </PromptInputFooter>
         </PromptInput>
