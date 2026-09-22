@@ -246,7 +246,7 @@ export const Route = createFileRoute("/api/chat")({
               execute: async ({ include_done }) => {
                 const query = ctx.supabase
                   .from("tasks")
-                  .select("id, title, details, due_at, status, created_at, completed_at")
+                  .select("id, title, details, due_at, status, created_at, completed_at, project_id")
                   .eq("user_id", ctx.userId)
                   .order("created_at", { ascending: true });
                 const { data, error } = include_done

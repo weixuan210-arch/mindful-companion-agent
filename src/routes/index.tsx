@@ -116,7 +116,7 @@ function Companion({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tasks")
-        .select("id, title, details, due_at, status, created_at, completed_at")
+        .select("id, title, details, due_at, status, created_at, completed_at, project_id")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
       if (error) throw error;
