@@ -7,6 +7,7 @@ import {
   DRIVE_FOLDER_NAME,
   DRIVE_SCOPES,
   GATEWAY_BASE_URL,
+  VAULT_DEFAULT_FOLDER,
 } from "@/lib/driveShared";
 
 function clientApiKey(): string {
@@ -179,4 +180,18 @@ export const disconnectDrive = createServerFn({ method: "POST" })
     }
     await deleteDriveConnection(context.userId);
     return { connected: false };
+  });
+
+/** Reads new or changed notes from the person's Obsidian vault folder in Drive. */
+export const syncObsidianVault = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { folderName?: string } | undefined) => ({
+    folderName: (input?.folderName ?? VAULT_DEFAULT_FOLDER).trim().slice(0, 80) || VAULT_DEFAULT_FOLDER,
+  }))
+  .handler(async ({ data, context }) => {
+    const { syncVaultFolder } = await import("@/lib/vault.server");
+    return syncVaultFolder(
+      { supabase: context.supabase, userId: context.userId },
+      data.folderName,
+    );
   });
