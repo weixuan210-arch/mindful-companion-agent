@@ -13,7 +13,9 @@ import {
   type BillyExpression,
 } from "@/components/billy/AnimatedBilly";
 import { DailyCheckIn } from "@/components/billy/DailyCheckIn";
+import { CalendarCard } from "@/components/billy/CalendarCard";
 import { DriveCard } from "@/components/billy/DriveCard";
+
 import { MoodCard } from "@/components/billy/MoodCard";
 import { NudgeCard } from "@/components/billy/NudgeCard";
 import { SidebarBilly } from "@/components/billy/SidebarBilly";
@@ -83,7 +85,10 @@ const TOOL_TITLES: Record<string, string> = {
   "tool-list_projects": "Looking at your projects",
   "tool-create_project": "Starting a project",
   "tool-assign_task_project": "Filing that away",
+  "tool-list_calendar_events": "Checking your calendar",
+  "tool-create_calendar_event": "Putting that on your calendar",
 };
+
 
 
 // Billy's quiet acknowledgment when a task is ticked off — honest, never gushing.
@@ -336,7 +341,9 @@ function Companion({ userId }: { userId: string }) {
             onToggle={toggleTask}
           />
           <DriveCard userId={userId} />
+          <CalendarCard userId={userId} />
           <VaultCard userId={userId} />
+
           <SidebarBilly
             expression={companionState.expression}
             thinking={companionState.thinking}
