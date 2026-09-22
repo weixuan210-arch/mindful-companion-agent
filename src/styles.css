@@ -151,3 +151,30 @@
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-soft);
 }
+
+/* Gentle strike-through sweep when a task lands in "Recently done". */
+.strike-in {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.strike-in::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.6;
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: strike-sweep 0.45s ease-out 0.15s forwards;
+}
+
+@keyframes strike-sweep {
+  to {
+    transform: scaleX(1);
+  }
+}
