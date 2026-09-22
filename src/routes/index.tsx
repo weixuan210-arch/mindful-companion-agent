@@ -154,6 +154,11 @@ function Companion({ userId }: { userId: string }) {
         toast.error("Couldn't update that just now.");
         return;
       }
+      if (done) {
+        toast(DONE_LINES[Math.floor(Math.random() * DONE_LINES.length)]!, {
+          description: `“${task.title}” is off your mind.`,
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
     },
     [queryClient, userId],
