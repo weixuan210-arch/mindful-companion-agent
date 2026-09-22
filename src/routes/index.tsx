@@ -192,7 +192,9 @@ function Companion({ userId }: { userId: string }) {
 
   const onTurnFinished = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["tasks", userId] });
+    queryClient.invalidateQueries({ queryKey: ["projects", userId] });
   }, [queryClient, userId]);
+
 
   if (historyQuery.isLoading) {
     return (
@@ -235,7 +237,12 @@ function Companion({ userId }: { userId: string }) {
 
         <aside className="flex flex-col gap-5">
           <MoodCard mood={mood} signals={signals} threshold={threshold} />
-          <TaskList tasks={tasks} threshold={threshold} onToggle={toggleTask} />
+          <TaskList
+            tasks={tasks}
+            projects={projectsQuery.data ?? []}
+            threshold={threshold}
+            onToggle={toggleTask}
+          />
           <DriveCard userId={userId} />
         </aside>
       </div>
