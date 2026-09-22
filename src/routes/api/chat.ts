@@ -76,6 +76,7 @@ export const Route = createFileRoute("/api/chat")({
         // Persist the incoming user turn.
         const lastMessage = messages[messages.length - 1];
         let filesSavedToDrive = 0;
+        let attachedCount = 0;
         if (lastMessage?.role === "user") {
           await saveConversationTurn(ctx, [
             {
