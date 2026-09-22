@@ -115,7 +115,6 @@ export const backfillDrive = createServerFn({ method: "POST" })
     const connection = await getDriveConnection(context.userId);
     if (!connection) return { copied: 0 };
 
-    const { mirrorToDrive } = await import("@/lib/drive.server");
     const ctx = { supabase: context.supabase, userId: context.userId };
 
     const [{ data: thoughts }, { data: tasks }] = await Promise.all([

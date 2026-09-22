@@ -26,7 +26,6 @@ export const Route = createFileRoute("/api/chat")({
           buildSystemPrompt,
           saveConversationTurn,
         } = await import("@/lib/companion.server");
-        void (await import("@/lib/drive.server")); // warm module for tool imports below
         const {
           createLovableAiGatewayRunIdFetch,
           getLovableAiGatewayRunId,
