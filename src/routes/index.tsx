@@ -37,7 +37,7 @@ import {
   usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { FileText, Paperclip, X } from "lucide-react";
+import { FileText, Mic, Paperclip, Square, Volume2, VolumeX, X } from "lucide-react";
 import {
   Tool,
   ToolContent,
@@ -49,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
 import { computeMood, computeNudge, computeSignals, type TaskLike } from "@/lib/mood";
+import { recordWav, streamSpeech, transcribeRecording, type Recorder } from "@/lib/voice";
 
 export const Route = createFileRoute("/")({
   head: () => ({
