@@ -48,11 +48,40 @@ export const Route = createFileRoute("/api/chat")({
 
         const snapshot = await buildSnapshot(ctx);
 
+        // File parts arrive as data URLs. Never store those megabytes in the
+        // messages table — keep the filename as a marker instead.
+        const stripFileData = (parts: unknown[]) =>
+          parts.map((p) => {
+            const part = p as { type?: string; url?: string };
+            return part?.type === "file" && part.url?.startsWith("data:")
+              ? { ...(p as object), url: "" }
+              : p;
+          });
+
+        // The model needs the real file data; stale markers from earlier turns
+        // become a plain text note so context stays truthful.
+        const messagesForModel = messages.map((m) => ({
+          ...m,
+          parts: (m.parts ?? []).map((p) => {
+            const part = p as { type?: string; url?: string; filename?: string; mediaType?: string };
+            if (part?.type !== "file") return p;
+            if (part.url?.startsWith("data:") || part.url?.startsWith("http")) return p;
+            return {
+              type: "text",
+              text: `[They shared a file earlier: ${part.filename ?? "attachment"}]`,
+            };
+          }),
+        }));
+
         // Persist the incoming user turn.
         const lastMessage = messages[messages.length - 1];
         if (lastMessage?.role === "user") {
           await saveConversationTurn(ctx, [
-            { role: "user", parts: lastMessage.parts, sdk_message_id: lastMessage.id ?? null },
+            {
+              role: "user",
+              parts: stripFileData(lastMessage.parts ?? []),
+              sdk_message_id: lastMessage.id ?? null,
+            },
           ]);
         }
 
@@ -68,7 +97,7 @@ export const Route = createFileRoute("/api/chat")({
         const result = streamText({
           model: lovable.responses("openai/gpt-6-astra"),
           system: buildSystemPrompt(snapshot, timeZone),
-          messages: await convertToModelMessages(messages),
+          messages: await convertToModelMessages(messagesForModel),
           stopWhen: stepCountIs(50),
           abortSignal: request.signal,
           tools: {
