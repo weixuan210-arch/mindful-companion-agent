@@ -440,6 +440,7 @@ function ChatPanel({
   }, []);
 
   const { messages, sendMessage, status, stop, error } = useChat({
+    id: "billy",
     messages: initialMessages,
     transport,
     onFinish: ({ message }) => {
@@ -458,6 +459,35 @@ function ChatPanel({
       toast.error("Billy couldn't answer just now. Give it another go in a moment.");
     },
   });
+
+  const toggleRecording = useCallback(async () => {
+    if (isRecording) {
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      setIsRecording(false);
+      if (!recorder) return;
+      setIsTranscribing(true);
+      try {
+        const file = await recorder.stop();
+        const text = await transcribeRecording(file);
+        lastFromVoiceRef.current = true;
+        sendMessage({ text });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Billy couldn't hear that.");
+      } finally {
+        setIsTranscribing(false);
+      }
+      return;
+    }
+    speakAbortRef.current?.abort();
+    try {
+      recorderRef.current = await recordWav();
+      setIsRecording(true);
+    } catch {
+      toast.error("Billy needs microphone access — allow it in your browser and try again.");
+    }
+  }, [isRecording, sendMessage]);
+
 
   const isBusy = status === "submitted" || status === "streaming";
   const baselineExpression = moodExpression(moodKey);
