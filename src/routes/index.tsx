@@ -1,6 +1,6 @@
 import { useChat } from "@ai-sdk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
@@ -198,9 +198,14 @@ function Companion({ userId }: { userId: string }) {
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/patterns">Patterns</Link>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </Button>
+        </div>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem]">
