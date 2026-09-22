@@ -66,12 +66,13 @@ export function AnimatedBilly({
   className,
 }: {
   expression: BillyExpression;
-  size?: "message" | "thinking";
+  size?: "message" | "thinking" | "companion";
   thinking?: boolean;
   className?: string;
 }) {
   const reduceMotion = useReducedMotion();
-  const dimension = size === "thinking" ? "h-16 w-16" : "h-12 w-12";
+  const dimension =
+    size === "companion" ? "h-28 w-28" : size === "thinking" ? "h-16 w-16" : "h-12 w-12";
 
   return (
     <motion.div
@@ -84,10 +85,12 @@ export function AnimatedBilly({
         ? {
             animate: thinking
               ? { y: [0, -3, 0], rotate: [-1.5, 1.5, -1.5] }
-              : { y: [0, -1.5, 0] },
+              : size === "companion"
+                ? { y: [0, -3, 0], rotate: [0, 0.8, 0, -0.8, 0] }
+                : { y: [0, -1.5, 0] },
           }
         : {})}
-      transition={{ duration: thinking ? 1.35 : 3.6, repeat: Infinity, ease: "easeInOut" }}
+      transition={{ duration: thinking ? 1.35 : size === "companion" ? 4.8 : 3.6, repeat: Infinity, ease: "easeInOut" }}
       role="img"
       aria-label={thinking ? "Billy is thinking" : LABELS[expression]}
     >
