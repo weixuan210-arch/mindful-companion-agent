@@ -440,7 +440,6 @@ function ChatPanel({
   }, []);
 
   const { messages, sendMessage, status, stop, error } = useChat({
-    id: "billy",
     messages: initialMessages,
     transport,
     onFinish: ({ message }) => {
