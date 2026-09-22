@@ -38,6 +38,10 @@ export function SidebarBilly({
   const [idleStep, setIdleStep] = useState(0);
 
   useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) setCollapsed(true);
+  }, []);
+
+  useEffect(() => {
     setIdleStep(0);
   }, [expression, thinking]);
 
@@ -61,7 +65,7 @@ export function SidebarBilly({
       layout={!reduceMotion}
       className={cn(
         "fixed bottom-4 right-4 z-30 border border-border bg-card shadow-lifted lg:sticky lg:bottom-6 lg:z-10",
-        collapsed ? "rounded-full" : "w-[min(17rem,calc(100vw-2rem))] rounded-xl lg:w-full",
+        collapsed ? "rounded-full" : "w-[min(15rem,calc(100vw-2rem))] rounded-xl lg:w-full",
       )}
       aria-label="Billy companion"
     >
