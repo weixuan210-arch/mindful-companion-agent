@@ -393,11 +393,95 @@ function ChatPanel({
     [],
   );
 
+  const [voiceOn, setVoiceOn] = useState<boolean>(
+    () => typeof window !== "undefined" && window.localStorage.getItem("billy-voice-on") === "1",
+  );
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [speakingId, setSpeakingId] = useState<string | null>(null);
+  const recorderRef = useRef<Recorder | null>(null);
+  const speakAbortRef = useRef<AbortController | null>(null);
+  const lastFromVoiceRef = useRef(false);
+
+  const speakMessage = useCallback(
+    async (id: string, text: string) => {
+      if (speakingId === id) {
+        speakAbortRef.current?.abort();
+        return;
+      }
+      speakAbortRef.current?.abort();
+      if (!text.trim()) return;
+      const controller = new AbortController();
+      speakAbortRef.current = controller;
+      setSpeakingId(id);
+      try {
+        await streamSpeech(text.replace(/[#*_`>]/g, ""), controller.signal);
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          toast.error(error instanceof Error ? error.message : "Billy lost his voice. Try again?");
+        }
+      } finally {
+        if (speakAbortRef.current === controller) {
+          speakAbortRef.current = null;
+          setSpeakingId(null);
+        }
+      }
+    },
+    [speakingId],
+  );
+
+  const toggleVoice = useCallback(() => {
+    setVoiceOn((on) => {
+      const next = !on;
+      window.localStorage.setItem("billy-voice-on", next ? "1" : "0");
+      if (!next) speakAbortRef.current?.abort();
+      return next;
+    });
+  }, []);
+
+  const toggleRecording = useCallback(async () => {
+    if (isRecording) {
+      const recorder = recorderRef.current;
+      recorderRef.current = null;
+      setIsRecording(false);
+      if (!recorder) return;
+      setIsTranscribing(true);
+      try {
+        const file = await recorder.stop();
+        const text = await transcribeRecording(file);
+        lastFromVoiceRef.current = true;
+        sendMessage({ text });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Billy couldn't hear that.");
+      } finally {
+        setIsTranscribing(false);
+      }
+      return;
+    }
+    speakAbortRef.current?.abort();
+    try {
+      recorderRef.current = await recordWav();
+      setIsRecording(true);
+    } catch {
+      toast.error("Billy needs microphone access — allow it in your browser and try again.");
+    }
+  }, [isRecording, sendMessage]);
+
   const { messages, sendMessage, status, stop, error } = useChat({
     id: "billy",
     messages: initialMessages,
     transport,
-    onFinish: onTurnFinished,
+    onFinish: ({ message }) => {
+      onTurnFinished();
+      const shouldSpeak = voiceOn || lastFromVoiceRef.current;
+      lastFromVoiceRef.current = false;
+      if (!shouldSpeak || message.role !== "assistant") return;
+      const text = message.parts
+        .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+        .map((part) => part.text)
+        .join(" ");
+      void speakMessage(message.id, text);
+    },
     onError: (chatError) => {
       console.error(chatError);
       toast.error("Billy couldn't answer just now. Give it another go in a moment.");
