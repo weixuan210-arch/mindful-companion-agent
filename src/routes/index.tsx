@@ -19,11 +19,14 @@ import {
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
+  usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { FileText, Paperclip, X } from "lucide-react";
 import {
   Tool,
   ToolContent,
@@ -344,6 +347,32 @@ function ChatPanel({
                       <p key={index} className="text-xs italic text-muted-foreground">
                         {part.text}
                       </p>
+                    );
+                  }
+                  if (part.type === "file") {
+                    const filePart = part as {
+                      mediaType?: string;
+                      filename?: string;
+                      url?: string;
+                    };
+                    if (filePart.mediaType?.startsWith("image/") && filePart.url?.startsWith("data:")) {
+                      return (
+                        <img
+                          key={index}
+                          src={filePart.url}
+                          alt={filePart.filename ?? "Shared image"}
+                          className="max-h-52 rounded-lg"
+                        />
+                      );
+                    }
+                    return (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-background/20 px-2 py-1 text-xs"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {filePart.filename ?? "Attachment"}
+                      </span>
                     );
                   }
                   if (part.type.startsWith("tool-")) {
