@@ -14,6 +14,8 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as PatternsRouteImport } from './routes/patterns'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiSpeechRouteImport } from './routes/api/speech'
+import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as OauthGoogleCalendarReturnRouteImport } from './routes/oauth/google-calendar/return'
 import { Route as OauthGoogleDriveReturnRouteImport } from './routes/oauth/google-drive/return'
 
@@ -42,6 +44,16 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSpeechRoute = ApiSpeechRouteImport.update({
+  id: '/api/speech',
+  path: '/api/speech',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
+  id: '/api/transcribe',
+  path: '/api/transcribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OauthGoogleCalendarReturnRoute =
   OauthGoogleCalendarReturnRouteImport.update({
     id: '/oauth/google-calendar/return',
@@ -60,6 +72,8 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof CalendarRoute
   '/patterns': typeof PatternsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/speech': typeof ApiSpeechRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/oauth/google-calendar/return': typeof OauthGoogleCalendarReturnRoute
   '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
 }
@@ -69,6 +83,8 @@ export interface FileRoutesByTo {
   '/calendar': typeof CalendarRoute
   '/patterns': typeof PatternsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/speech': typeof ApiSpeechRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/oauth/google-calendar/return': typeof OauthGoogleCalendarReturnRoute
   '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
 }
@@ -79,6 +95,8 @@ export interface FileRoutesById {
   '/calendar': typeof CalendarRoute
   '/patterns': typeof PatternsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/speech': typeof ApiSpeechRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/oauth/google-calendar/return': typeof OauthGoogleCalendarReturnRoute
   '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
 }
@@ -90,6 +108,8 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/patterns'
     | '/api/chat'
+    | '/api/speech'
+    | '/api/transcribe'
     | '/oauth/google-calendar/return'
     | '/oauth/google-drive/return'
   fileRoutesByTo: FileRoutesByTo
@@ -99,6 +119,8 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/patterns'
     | '/api/chat'
+    | '/api/speech'
+    | '/api/transcribe'
     | '/oauth/google-calendar/return'
     | '/oauth/google-drive/return'
   id:
@@ -108,6 +130,8 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/patterns'
     | '/api/chat'
+    | '/api/speech'
+    | '/api/transcribe'
     | '/oauth/google-calendar/return'
     | '/oauth/google-drive/return'
   fileRoutesById: FileRoutesById
@@ -118,6 +142,8 @@ export interface RootRouteChildren {
   CalendarRoute: typeof CalendarRoute
   PatternsRoute: typeof PatternsRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiSpeechRoute: typeof ApiSpeechRoute
+  ApiTranscribeRoute: typeof ApiTranscribeRoute
   OauthGoogleCalendarReturnRoute: typeof OauthGoogleCalendarReturnRoute
   OauthGoogleDriveReturnRoute: typeof OauthGoogleDriveReturnRoute
 }
@@ -159,6 +185,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/speech': {
+      id: '/api/speech'
+      path: '/api/speech'
+      fullPath: '/api/speech'
+      preLoaderRoute: typeof ApiSpeechRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/transcribe': {
+      id: '/api/transcribe'
+      path: '/api/transcribe'
+      fullPath: '/api/transcribe'
+      preLoaderRoute: typeof ApiTranscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/oauth/google-calendar/return': {
       id: '/oauth/google-calendar/return'
       path: '/oauth/google-calendar/return'
@@ -182,6 +222,8 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarRoute: CalendarRoute,
   PatternsRoute: PatternsRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiSpeechRoute: ApiSpeechRoute,
+  ApiTranscribeRoute: ApiTranscribeRoute,
   OauthGoogleCalendarReturnRoute: OauthGoogleCalendarReturnRoute,
   OauthGoogleDriveReturnRoute: OauthGoogleDriveReturnRoute,
 }
