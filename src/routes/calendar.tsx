@@ -360,7 +360,12 @@ function CalendarView({ userId }: { userId: string }) {
               {key}
             </span>
           ))}
-          <span className="ml-auto">Mood dots show how the day closed.</span>
+          <span className="ml-auto">
+            {calendarConnected
+              ? "Outlined chips are events from your Google Calendar."
+              : "Connect your Google Calendar on Billy's main screen to see events here."}
+          </span>
+
         </div>
       </section>
     </main>
