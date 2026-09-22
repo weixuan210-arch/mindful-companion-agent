@@ -58,7 +58,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Task = TaskLike & { details: string | null };
+type Task = TaskLike & { details: string | null; project_id: string | null };
 
 const TOOL_TITLES: Record<string, string> = {
   "tool-save_thought": "Keeping that",
@@ -66,7 +66,11 @@ const TOOL_TITLES: Record<string, string> = {
   "tool-create_task": "Adding to your list",
   "tool-complete_task": "Ticking that off",
   "tool-list_tasks": "Checking your list",
+  "tool-list_projects": "Looking at your projects",
+  "tool-create_project": "Starting a project",
+  "tool-assign_task_project": "Filing that away",
 };
+
 
 // Billy's quiet acknowledgment when a task is ticked off — honest, never gushing.
 const DONE_LINES = [
