@@ -141,7 +141,7 @@ ${openTasks || "(none)"}
 RECENT THOUGHTS THEY SAVED
 ${recentThoughts || "(none yet)"}
 
-Today is ${new Date().toISOString().slice(0, 10)}.`;
+For them it is currently ${localNow} (timezone: ${timeZone}). Interpret "today", "tomorrow", "tonight" etc. against this local time, never UTC. When recording a due date from a relative phrase, work out the calendar date in their timezone first.`;
 }
 
 export async function saveConversationTurn(

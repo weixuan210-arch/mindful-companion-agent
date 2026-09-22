@@ -228,6 +228,7 @@ function ChatPanel({
           if (data.session?.access_token) {
             headers.set("Authorization", `Bearer ${data.session.access_token}`);
           }
+          headers.set("x-user-timezone", Intl.DateTimeFormat().resolvedOptions().timeZone);
           return fetch(input, { ...init, headers });
         },
       }),
