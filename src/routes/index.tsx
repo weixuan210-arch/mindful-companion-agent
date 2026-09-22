@@ -6,6 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import billy from "@/assets/billy.png";
+import {
+  AnimatedBilly,
+  expressionFromText,
+  moodExpression,
+} from "@/components/billy/AnimatedBilly";
 import { DailyCheckIn } from "@/components/billy/DailyCheckIn";
 import { DriveCard } from "@/components/billy/DriveCard";
 import { MoodCard } from "@/components/billy/MoodCard";
@@ -311,6 +316,7 @@ function Companion({ userId }: { userId: string }) {
           initialMessages={historyQuery.data ?? []}
           onTurnFinished={onTurnFinished}
           nudge={nudge}
+          moodKey={mood.key}
         />
 
         <aside className="flex flex-col gap-5">
@@ -333,10 +339,12 @@ function ChatPanel({
   initialMessages,
   onTurnFinished,
   nudge,
+  moodKey,
 }: {
   initialMessages: UIMessage[];
   onTurnFinished: () => void;
   nudge: ReturnType<typeof computeNudge>;
+  moodKey: ReturnType<typeof computeMood>["key"];
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -369,6 +377,8 @@ function ChatPanel({
   });
 
   const isBusy = status === "submitted" || status === "streaming";
+  const baselineExpression = moodExpression(moodKey);
+  const latestAssistantIndex = messages.findLastIndex((message) => message.role === "assistant");
 
   useEffect(() => {
     if (!isBusy) textareaRef.current?.focus();
@@ -405,15 +415,25 @@ function ChatPanel({
             />
           )}
 
-          {messages.map((message) => (
-            <Message from={message.role} key={message.id}>
-              <MessageContent
-                className={
-                  message.role === "assistant"
-                    ? "bg-transparent p-0 text-foreground"
-                    : "bg-chat-user text-chat-user-foreground"
-                }
-              >
+          {messages.map((message, messageIndex) => {
+            const assistantText = message.parts
+              .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+              .map((part) => part.text)
+              .join(" ");
+            const expression = expressionFromText(assistantText, baselineExpression);
+            const showBilly = message.role === "assistant" && messageIndex === latestAssistantIndex;
+
+            return (
+              <Message from={message.role} key={message.id}>
+                <div className={showBilly ? "flex items-start gap-3" : undefined}>
+                  {showBilly && <AnimatedBilly expression={expression} />}
+                  <MessageContent
+                    className={
+                      message.role === "assistant"
+                        ? "min-w-0 flex-1 bg-transparent p-0 text-foreground"
+                        : "bg-chat-user text-chat-user-foreground"
+                    }
+                  >
                 {message.parts.map((part, index) => {
                   if (part.type === "text") {
                     return <MessageResponse key={index}>{part.text}</MessageResponse>;
@@ -478,11 +498,18 @@ function ChatPanel({
                   }
                   return null;
                 })}
-              </MessageContent>
-            </Message>
-          ))}
+                  </MessageContent>
+                </div>
+              </Message>
+            );
+          })}
 
-          {status === "submitted" && <Shimmer>Billy is thinking...</Shimmer>}
+          {status === "submitted" && (
+            <div className="flex items-center gap-3">
+              <AnimatedBilly expression="thoughtful" size="thinking" thinking />
+              <Shimmer>Billy is thinking...</Shimmer>
+            </div>
+          )}
           {error && (
             <p className="text-sm text-destructive">
               That didn't send. Your words are still in the box — try again.
