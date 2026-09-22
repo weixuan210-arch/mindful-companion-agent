@@ -378,7 +378,10 @@ function ChatPanel({
 
   const isBusy = status === "submitted" || status === "streaming";
   const baselineExpression = moodExpression(moodKey);
-  const latestAssistantIndex = messages.findLastIndex((message) => message.role === "assistant");
+  const latestAssistantIndex = messages.reduce(
+    (latest, message, index) => (message.role === "assistant" ? index : latest),
+    -1,
+  );
 
   useEffect(() => {
     if (!isBusy) textareaRef.current?.focus();

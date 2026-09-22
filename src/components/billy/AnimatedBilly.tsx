@@ -80,13 +80,13 @@ export function AnimatedBilly({
         dimension,
         className,
       )}
-      animate={
-        reduceMotion
-          ? undefined
-          : thinking
-            ? { y: [0, -3, 0], rotate: [-1.5, 1.5, -1.5] }
-            : { y: [0, -1.5, 0] }
-      }
+      {...(!reduceMotion
+        ? {
+            animate: thinking
+              ? { y: [0, -3, 0], rotate: [-1.5, 1.5, -1.5] }
+              : { y: [0, -1.5, 0] },
+          }
+        : {})}
       transition={{ duration: thinking ? 1.35 : 3.6, repeat: Infinity, ease: "easeInOut" }}
       role="img"
       aria-label={thinking ? "Billy is thinking" : LABELS[expression]}
@@ -99,7 +99,7 @@ export function AnimatedBilly({
           className="absolute left-1/2 top-1/2 h-[148%] w-[148%] max-w-none -translate-x-1/2 -translate-y-[45%] object-contain"
           initial={reduceMotion ? false : { opacity: 0, scale: 0.94, rotate: -2 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
-          exit={reduceMotion ? undefined : { opacity: 0, scale: 1.03 }}
+          {...(!reduceMotion ? { exit: { opacity: 0, scale: 1.03 } } : {})}
           transition={{ duration: 0.24, ease: "easeOut" }}
         />
       </AnimatePresence>
@@ -120,7 +120,9 @@ export function AnimatedBilly({
             <motion.span
               key={dot}
               className="h-1 w-1 rounded-full bg-primary"
-              animate={reduceMotion ? undefined : { y: [0, -2, 0], opacity: [0.45, 1, 0.45] }}
+              {...(!reduceMotion
+                ? { animate: { y: [0, -2, 0], opacity: [0.45, 1, 0.45] } }
+                : {})}
               transition={{ duration: 0.8, repeat: Infinity, delay: dot * 0.14 }}
             />
           ))}
