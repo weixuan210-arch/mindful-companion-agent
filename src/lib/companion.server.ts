@@ -25,25 +25,31 @@ export async function createCompanionContext(token: string): Promise<CompanionCo
 }
 
 export async function buildSnapshot(ctx: CompanionContext) {
-  const [{ data: profile }, { data: tasks }, { data: thoughts }] = await Promise.all([
-    ctx.supabase
-      .from("profiles")
-      .select("display_name, nudge_threshold_days")
-      .eq("id", ctx.userId)
-      .maybeSingle(),
-    ctx.supabase
-      .from("tasks")
-      .select("id, title, details, due_at, status, created_at, completed_at")
-      .eq("user_id", ctx.userId)
-      .order("created_at", { ascending: true })
-      .limit(200),
-    ctx.supabase
-      .from("thoughts")
-      .select("content, tags, mood, created_at")
-      .eq("user_id", ctx.userId)
-      .order("created_at", { ascending: false })
-      .limit(25),
-  ]);
+  const [{ data: profile }, { data: tasks }, { data: thoughts }, { data: projects }] =
+    await Promise.all([
+      ctx.supabase
+        .from("profiles")
+        .select("display_name, nudge_threshold_days")
+        .eq("id", ctx.userId)
+        .maybeSingle(),
+      ctx.supabase
+        .from("tasks")
+        .select("id, title, details, due_at, status, created_at, completed_at, project_id")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: true })
+        .limit(200),
+      ctx.supabase
+        .from("thoughts")
+        .select("content, tags, mood, created_at")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: false })
+        .limit(25),
+      ctx.supabase
+        .from("projects")
+        .select("id, name, description")
+        .eq("user_id", ctx.userId)
+        .order("created_at", { ascending: true }),
+    ]);
 
   const threshold = profile?.nudge_threshold_days ?? 5;
   const signals = computeSignals((tasks ?? []) as TaskLike[], threshold);
@@ -55,11 +61,13 @@ export async function buildSnapshot(ctx: CompanionContext) {
     threshold,
     tasks: tasks ?? [],
     thoughts: thoughts ?? [],
+    projects: projects ?? [],
     signals,
     mood,
     nudge,
   };
 }
+
 
 /** YYYY-MM-DD of a moment in the user's own timezone. */
 function localDateString(date: Date, timeZone: string): string {
