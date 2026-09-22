@@ -87,6 +87,27 @@ export function computeSignals(
   };
 }
 
+/**
+ * Reconstructs what the list looked like at a past moment: tasks that didn't
+ * exist yet are dropped, and tasks completed after that moment were still open.
+ */
+export function taskStateAt<T extends TaskLike>(tasks: T[], atMs: number): TaskLike[] {
+  const state: TaskLike[] = [];
+  for (const t of tasks) {
+    if (new Date(t.created_at).getTime() > atMs) continue;
+    const doneBy = t.completed_at ? new Date(t.completed_at).getTime() <= atMs : false;
+    state.push({
+      id: t.id,
+      title: t.title,
+      due_at: t.due_at,
+      created_at: t.created_at,
+      status: doneBy ? "done" : "open",
+      completed_at: doneBy ? t.completed_at : null,
+    });
+  }
+  return state;
+}
+
 export function computeMood(s: Signals): Mood {
   // Note: doneRecently never lowers strain. Progress is acknowledged in words,
   // not used to cancel out something being avoided.
