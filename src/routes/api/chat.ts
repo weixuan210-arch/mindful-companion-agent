@@ -26,7 +26,7 @@ export const Route = createFileRoute("/api/chat")({
           buildSystemPrompt,
           saveConversationTurn,
         } = await import("@/lib/companion.server");
-        const { mirrorToDrive } = await import("@/lib/drive.server");
+        void (await import("@/lib/drive.server")); // warm module for tool imports below
         const {
           createLovableAiGatewayRunIdFetch,
           getLovableAiGatewayRunId,
@@ -142,7 +142,13 @@ export const Route = createFileRoute("/api/chat")({
                   .select("id, created_at")
                   .single();
                 if (error) return { saved: false, error: error.message };
-                const mirrored = await mirrorToDrive(ctx, "thought", data.id, content);
+                const { mirrorThoughtToDrive } = await import("@/lib/drive.server");
+                const mirrored = await mirrorThoughtToDrive(ctx, data.id, {
+                  content,
+                  tags,
+                  mood,
+                  createdAt: data.created_at,
+                });
                 return { saved: true, id: data.id, mirroredToDrive: mirrored };
               },
             }),
@@ -192,10 +198,17 @@ export const Route = createFileRoute("/api/chat")({
                     due_at: due_at ? new Date(`${due_at}T12:00:00Z`).toISOString() : null,
                     project_id,
                   })
-                  .select("id")
+                  .select("id, created_at")
                   .single();
                 if (error) return { created: false, error: error.message };
-                await mirrorToDrive(ctx, "task", data.id, `${title}\n\n${details ?? ""}`);
+                const { mirrorTaskToDrive } = await import("@/lib/drive.server");
+                await mirrorTaskToDrive(ctx, data.id, {
+                  title,
+                  details,
+                  dueAt: due_at,
+                  status: "open",
+                  createdAt: data.created_at,
+                });
                 return { created: true, id: data.id, project_id };
               },
             }),
@@ -282,12 +295,30 @@ export const Route = createFileRoute("/api/chat")({
               description: "Mark a task as done using its id from the current picture.",
               inputSchema: z.object({ id: z.string().describe("The task id.") }),
               execute: async ({ id }) => {
+                const { data: task } = await ctx.supabase
+                  .from("tasks")
+                  .select("id, title, details, due_at, status, created_at")
+                  .eq("id", id)
+                  .eq("user_id", ctx.userId)
+                  .maybeSingle();
                 const { error } = await ctx.supabase
                   .from("tasks")
                   .update({ status: "done", completed_at: new Date().toISOString() })
                   .eq("id", id)
                   .eq("user_id", ctx.userId);
-                return error ? { done: false, error: error.message } : { done: true };
+                if (error) return { done: false, error: error.message };
+                // Keep the Drive copy truthful: status flips to done there too.
+                if (task && task.status !== "done") {
+                  const { mirrorTaskToDrive } = await import("@/lib/drive.server");
+                  await mirrorTaskToDrive(ctx, task.id, {
+                    title: task.title,
+                    details: task.details,
+                    dueAt: task.due_at,
+                    status: "done",
+                    createdAt: task.created_at,
+                  });
+                }
+                return { done: true };
               },
             }),
             list_tasks: tool({

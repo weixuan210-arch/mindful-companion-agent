@@ -121,25 +121,39 @@ export const backfillDrive = createServerFn({ method: "POST" })
     const [{ data: thoughts }, { data: tasks }] = await Promise.all([
       context.supabase
         .from("thoughts")
-        .select("id, content")
+        .select("id, content, tags, mood, created_at")
         .eq("user_id", context.userId)
         .is("drive_file_id", null)
         .limit(100),
       context.supabase
         .from("tasks")
-        .select("id, title, details")
+        .select("id, title, details, due_at, created_at")
         .eq("user_id", context.userId)
         .is("drive_file_id", null)
         .limit(100),
     ]);
 
+    const { mirrorThoughtToDrive, mirrorTaskToDrive } = await import("@/lib/drive.server");
+
     let copied = 0;
     for (const thought of thoughts ?? []) {
-      if (await mirrorToDrive(ctx, "thought", thought.id, thought.content)) copied += 1;
+      const ok = await mirrorThoughtToDrive(ctx, thought.id, {
+        content: thought.content,
+        tags: thought.tags ?? [],
+        mood: thought.mood,
+        createdAt: thought.created_at,
+      });
+      if (ok) copied += 1;
     }
     for (const task of tasks ?? []) {
-      const body = `${task.title}\n\n${task.details ?? ""}`;
-      if (await mirrorToDrive(ctx, "task", task.id, body)) copied += 1;
+      const ok = await mirrorTaskToDrive(ctx, task.id, {
+        title: task.title,
+        details: task.details,
+        dueAt: task.due_at,
+        status: "open",
+        createdAt: task.created_at,
+      });
+      if (ok) copied += 1;
     }
     return { copied };
   });
