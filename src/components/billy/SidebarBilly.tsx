@@ -101,7 +101,7 @@ export function SidebarBilly({
                 key={visibleExpression}
                 initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 1.03 }}
+                {...(!reduceMotion ? { exit: { opacity: 0, scale: 1.03 } } : {})}
                 transition={{ duration: 0.3 }}
               >
                 <AnimatedBilly expression={visibleExpression} size="companion" thinking={thinking} />

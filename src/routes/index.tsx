@@ -341,7 +341,7 @@ function Companion({ userId }: { userId: string }) {
             expression={companionState.expression}
             thinking={companionState.thinking}
             moodLabel={mood.label}
-            cue={companionState.cue}
+            {...(companionState.cue ? { cue: companionState.cue } : {})}
           />
         </aside>
       </div>
