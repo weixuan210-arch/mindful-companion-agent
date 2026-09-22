@@ -128,7 +128,20 @@ function Companion({ userId }: { userId: string }) {
     },
   });
 
-  const historyQuery = useQuery({
+  const projectsQuery = useQuery({
+    queryKey: ["projects", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, description")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+
     queryKey: ["messages", userId],
     queryFn: async () => {
       const { data, error } = await supabase
