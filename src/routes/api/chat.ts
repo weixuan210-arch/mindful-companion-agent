@@ -151,11 +151,13 @@ export const Route = createFileRoute("/api/chat")({
           model: lovable.responses("openai/gpt-6-astra"),
           system:
             buildSystemPrompt(snapshot, timeZone) +
+            calendarNote +
             (attachedCount > 0
               ? filesSavedToDrive === attachedCount
                 ? `\n\nNOTE: ${attachedCount === 1 ? "The file they just shared has" : `All ${attachedCount} files they just shared have`} been saved into their Billy folder in their Google Drive.`
                 : `\n\nNOTE: ${filesSavedToDrive} of ${attachedCount} files they just shared could be saved to their Billy Drive folder — the rest could not be kept (their Drive may not be connected). Be honest about that if it comes up.`
               : ""),
+
           messages: await convertToModelMessages(messagesForModel),
           stopWhen: stepCountIs(50),
           abortSignal: request.signal,
@@ -374,7 +376,63 @@ export const Route = createFileRoute("/api/chat")({
                 return error ? { error: error.message } : { tasks: data ?? [] };
               },
             }),
+            list_calendar_events: tool({
+              description:
+                "Look at their Google Calendar between two dates, for talking through their plan.",
+              inputSchema: z.object({
+                from: z.string().describe("Start date as YYYY-MM-DD in their local time."),
+                to: z.string().describe("End date as YYYY-MM-DD in their local time, inclusive."),
+              }),
+              execute: async ({ from, to }) => {
+                if (!calendarConnection) return { connected: false };
+                const { listCalendarEvents } = await import("@/lib/calendar.server");
+                const result = await listCalendarEvents(
+                  calendarConnection.connectionKey,
+                  new Date(`${from}T00:00:00Z`).toISOString(),
+                  new Date(new Date(`${to}T00:00:00Z`).getTime() + 86400000).toISOString(),
+                  100,
+                );
+                return result.ok
+                  ? { connected: true, events: result.data }
+                  : { connected: false, needsReconnect: result.needsReconnect };
+              },
+            }),
+            create_calendar_event: tool({
+              description:
+                "Put something on their Google Calendar. Use their local time. Only when they want it on the calendar.",
+              inputSchema: z.object({
+                title: z.string().describe("Short event title."),
+                description: z.string().nullable().describe("Extra context, or null."),
+                location: z.string().nullable().describe("Where it is, or null."),
+                start: z
+                  .string()
+                  .describe(
+                    "Start: YYYY-MM-DDTHH:mm:ss in their local time, or YYYY-MM-DD for an all-day event.",
+                  ),
+                end: z
+                  .string()
+                  .describe(
+                    "End in the same format. For an all-day event use the next day's date.",
+                  ),
+              }),
+              execute: async ({ title, description, location, start, end }) => {
+                if (!calendarConnection) return { created: false, connected: false };
+                const { createCalendarEvent } = await import("@/lib/calendar.server");
+                const result = await createCalendarEvent(calendarConnection.connectionKey, {
+                  title,
+                  description,
+                  location,
+                  start,
+                  end,
+                  timeZone,
+                });
+                return result.ok
+                  ? { created: true, event: result.data }
+                  : { created: false, needsReconnect: result.needsReconnect, error: result.message };
+              },
+            }),
           },
+
           providerOptions: {
             openai: {
               forceReasoning: true,
