@@ -90,17 +90,27 @@ export function buildSystemPrompt(
   snapshot: Awaited<ReturnType<typeof buildSnapshot>>,
   timeZone: string,
 ) {
-  const { signals, mood, nudge, tasks, thoughts, threshold, displayName } = snapshot;
+  const { signals, mood, nudge, tasks, thoughts, projects, threshold, displayName } = snapshot;
   const now = new Date();
+
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
   const openTasks = tasks
     .filter((t) => t.status === "open")
     .map((t) => {
       const age = localDayDiff(new Date(t.created_at), now, timeZone);
       const due = t.due_at ? `, due ${localDateString(new Date(t.due_at), timeZone)}` : "";
-      return `- [${t.id}] ${t.title} (open ${age}d${due})`;
+      const project = t.project_id
+        ? `, project: ${projectName.get(t.project_id) ?? "unknown"}`
+        : ", unsorted";
+      return `- [${t.id}] ${t.title} (open ${age}d${due}${project})`;
     })
     .join("\n");
+
+  const projectList = projects
+    .map((p) => `- [${p.id}] ${p.name}${p.description ? ` — ${p.description}` : ""}`)
+    .join("\n");
+
 
   const recentThoughts = thoughts
     .slice(0, 12)
