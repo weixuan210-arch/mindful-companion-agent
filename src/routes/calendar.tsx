@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +9,8 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCalendarEvents } from "@/lib/calendar.functions";
+
 import {
   computeMood,
   computeSignals,
@@ -99,8 +102,22 @@ function CalendarView({ userId }: { userId: string }) {
     },
   });
 
+  const loadEvents = useServerFn(fetchCalendarEvents);
+  const monthEnd = useMemo(
+    () => new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1),
+    [monthStart],
+  );
+  const eventsQuery = useQuery({
+    queryKey: ["calendar-events", userId, monthStart.toISOString()],
+    queryFn: () =>
+      loadEvents({ data: { from: monthStart.toISOString(), to: monthEnd.toISOString() } }),
+  });
+
   const threshold = profileQuery.data?.nudge_threshold_days ?? 5;
   const tasks = tasksQuery.data ?? [];
+  const events = eventsQuery.data?.events ?? [];
+  const calendarConnected = eventsQuery.data?.connected === true;
+
 
   const days = useMemo(() => {
     const firstWeekday = (monthStart.getDay() + 6) % 7; // Monday-first
