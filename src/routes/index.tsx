@@ -638,22 +638,24 @@ function ChatPanel({
                   }
                   return null;
                         })}
-                        <button
-                          type="button"
-                          onClick={() => void speakMessage(message.id, assistantText)}
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                          aria-label={speakingId === message.id ? "Stop Billy's voice" : "Hear Billy say this"}
-                        >
-                          {speakingId === message.id ? (
-                            <>
-                              <VolumeX className="h-3.5 w-3.5" /> Hush
-                            </>
-                          ) : (
-                            <>
-                              <Volume2 className="h-3.5 w-3.5" /> Hear Billy
-                            </>
-                          )}
-                        </button>
+                        {message.role === "assistant" && assistantText.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => void speakMessage(message.id, assistantText)}
+                            className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                            aria-label={speakingId === message.id ? "Stop Billy's voice" : "Hear Billy say this"}
+                          >
+                            {speakingId === message.id ? (
+                              <>
+                                <VolumeX className="h-3.5 w-3.5" /> Hush
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 className="h-3.5 w-3.5" /> Hear Billy
+                              </>
+                            )}
+                          </button>
+                        )}
                       </MessageContent>
                 </div>
               </Message>
