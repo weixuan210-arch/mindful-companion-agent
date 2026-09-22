@@ -10,11 +10,13 @@ import {
   AnimatedBilly,
   expressionFromText,
   moodExpression,
+  type BillyExpression,
 } from "@/components/billy/AnimatedBilly";
 import { DailyCheckIn } from "@/components/billy/DailyCheckIn";
 import { DriveCard } from "@/components/billy/DriveCard";
 import { MoodCard } from "@/components/billy/MoodCard";
 import { NudgeCard } from "@/components/billy/NudgeCard";
+import { SidebarBilly } from "@/components/billy/SidebarBilly";
 import { TaskList } from "@/components/billy/TaskList";
 import { VaultCard } from "@/components/billy/VaultCard";
 import {
@@ -224,6 +226,11 @@ function Companion({ userId }: { userId: string }) {
   const signals = useMemo(() => computeSignals(tasks, threshold), [tasks, threshold]);
   const mood = useMemo(() => computeMood(signals), [signals]);
   const nudge = useMemo(() => computeNudge(signals, threshold), [signals, threshold]);
+  const [companionState, setCompanionState] = useState<{
+    expression: BillyExpression;
+    thinking: boolean;
+    cue?: string;
+  }>({ expression: moodExpression(mood.key), thinking: false });
 
   const toggleTask = useCallback(
     async (task: Task, done: boolean) => {
@@ -285,7 +292,7 @@ function Companion({ userId }: { userId: string }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-8 lg:py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 lg:px-8 lg:py-10">
       <header className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img src={billy} alt="Billy" width={816} height={816} className="h-10 w-10" />
@@ -317,6 +324,7 @@ function Companion({ userId }: { userId: string }) {
           onTurnFinished={onTurnFinished}
           nudge={nudge}
           moodKey={mood.key}
+          onCompanionChange={setCompanionState}
         />
 
         <aside className="flex flex-col gap-5">
@@ -329,6 +337,12 @@ function Companion({ userId }: { userId: string }) {
           />
           <DriveCard userId={userId} />
           <VaultCard userId={userId} />
+          <SidebarBilly
+            expression={companionState.expression}
+            thinking={companionState.thinking}
+            moodLabel={mood.label}
+            cue={companionState.cue}
+          />
         </aside>
       </div>
     </main>
@@ -340,11 +354,17 @@ function ChatPanel({
   onTurnFinished,
   nudge,
   moodKey,
+  onCompanionChange,
 }: {
   initialMessages: UIMessage[];
   onTurnFinished: () => void;
   nudge: ReturnType<typeof computeNudge>;
   moodKey: ReturnType<typeof computeMood>["key"];
+  onCompanionChange: (state: {
+    expression: BillyExpression;
+    thinking: boolean;
+    cue?: string;
+  }) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -382,6 +402,30 @@ function ChatPanel({
     (latest, message, index) => (message.role === "assistant" ? index : latest),
     -1,
   );
+  const latestAssistantText =
+    latestAssistantIndex >= 0
+      ? messages[latestAssistantIndex]?.parts
+          .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+          .map((part) => part.text)
+          .join(" ") ?? ""
+      : "";
+  const activeExpression = expressionFromText(latestAssistantText, baselineExpression);
+  const companionCue = latestAssistantText
+    .replace(/[#*_`>]/g, "")
+    .split(/(?<=[.!?])\s/)[0]
+    ?.slice(0, 110);
+
+  useEffect(() => {
+    if (isBusy) {
+      onCompanionChange({ expression: "thoughtful", thinking: true });
+      return;
+    }
+    onCompanionChange({
+      expression: activeExpression,
+      thinking: false,
+      ...(companionCue ? { cue: companionCue } : {}),
+    });
+  }, [activeExpression, companionCue, isBusy, onCompanionChange]);
 
   useEffect(() => {
     if (!isBusy) textareaRef.current?.focus();
