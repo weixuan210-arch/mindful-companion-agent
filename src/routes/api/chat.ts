@@ -36,6 +36,16 @@ export const Route = createFileRoute("/api/chat")({
         const ctx = await createCompanionContext(token);
         if (!ctx) return new Response("Unauthorized", { status: 401 });
 
+        // The browser tells us the user's IANA timezone so dates mean their local day.
+        const rawTz = request.headers.get("x-user-timezone") ?? "UTC";
+        let timeZone = "UTC";
+        try {
+          new Intl.DateTimeFormat("en", { timeZone: rawTz });
+          timeZone = rawTz;
+        } catch {
+          // invalid zone string — fall back to UTC
+        }
+
         const snapshot = await buildSnapshot(ctx);
 
         // Persist the incoming user turn.
@@ -57,7 +67,7 @@ export const Route = createFileRoute("/api/chat")({
 
         const result = streamText({
           model: lovable.responses("openai/gpt-6-astra"),
-          system: buildSystemPrompt(snapshot),
+          system: buildSystemPrompt(snapshot, timeZone),
           messages: await convertToModelMessages(messages),
           stopWhen: stepCountIs(50),
           abortSignal: request.signal,

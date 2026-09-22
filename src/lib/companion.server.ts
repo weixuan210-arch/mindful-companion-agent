@@ -61,22 +61,54 @@ export async function buildSnapshot(ctx: CompanionContext) {
   };
 }
 
-export function buildSystemPrompt(snapshot: Awaited<ReturnType<typeof buildSnapshot>>) {
+/** YYYY-MM-DD of a moment in the user's own timezone. */
+function localDateString(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/** Whole calendar days between two moments, counted on the user's local clock. */
+function localDayDiff(from: Date, to: Date, timeZone: string): number {
+  const [fy, fm, fd] = localDateString(from, timeZone).split("-").map(Number);
+  const [ty, tm, td] = localDateString(to, timeZone).split("-").map(Number);
+  return Math.max(0, Math.round((Date.UTC(ty!, tm! - 1, td!) - Date.UTC(fy!, fm! - 1, fd!)) / 86400000));
+}
+
+export function buildSystemPrompt(
+  snapshot: Awaited<ReturnType<typeof buildSnapshot>>,
+  timeZone: string,
+) {
   const { signals, mood, nudge, tasks, thoughts, threshold, displayName } = snapshot;
+  const now = new Date();
 
   const openTasks = tasks
     .filter((t) => t.status === "open")
     .map((t) => {
-      const age = Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000);
-      const due = t.due_at ? `, due ${new Date(t.due_at).toISOString().slice(0, 10)}` : "";
+      const age = localDayDiff(new Date(t.created_at), now, timeZone);
+      const due = t.due_at ? `, due ${localDateString(new Date(t.due_at), timeZone)}` : "";
       return `- [${t.id}] ${t.title} (open ${age}d${due})`;
     })
     .join("\n");
 
   const recentThoughts = thoughts
     .slice(0, 12)
-    .map((t) => `- ${new Date(t.created_at).toISOString().slice(0, 10)}: ${t.content}`)
+    .map((t) => `- ${localDateString(new Date(t.created_at), timeZone)}: ${t.content}`)
     .join("\n");
+
+  const localNow = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
 
   return `You are Billy — a cozy companion. You are kind, reassuring, nurturing, empathetic and wise.
 
@@ -109,7 +141,7 @@ ${openTasks || "(none)"}
 RECENT THOUGHTS THEY SAVED
 ${recentThoughts || "(none yet)"}
 
-Today is ${new Date().toISOString().slice(0, 10)}.`;
+For them it is currently ${localNow} (timezone: ${timeZone}). Interpret "today", "tomorrow", "tonight" etc. against this local time, never UTC. When recording a due date from a relative phrase, work out the calendar date in their timezone first.`;
 }
 
 export async function saveConversationTurn(
