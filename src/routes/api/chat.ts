@@ -91,6 +91,7 @@ export const Route = createFileRoute("/api/chat")({
             const part = p as { type?: string; url?: string };
             return part?.type === "file" && !!part.url?.startsWith("data:");
           }) as { url: string; filename?: string; mediaType?: string }[];
+          attachedCount = attachments.length;
 
           const { mirrorFileToDrive } = await import("@/lib/drive.server");
           const results = await Promise.all(
