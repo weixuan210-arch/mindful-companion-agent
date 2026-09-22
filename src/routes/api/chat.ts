@@ -101,7 +101,44 @@ export const Route = createFileRoute("/api/chat")({
           filesSavedToDrive = results.filter(Boolean).length;
         }
 
+        // Today's calendar, so Billy can talk about the day without being asked.
+        const { getCalendarConnection } = await import("@/lib/calendarConnection.server");
+        const calendarConnection = await getCalendarConnection(ctx.userId);
+        let calendarNote = "";
+        if (calendarConnection) {
+          const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+          const { listCalendarEvents } = await import("@/lib/calendar.server");
+          const from = new Date(`${dayKey}T00:00:00`);
+          const events = await listCalendarEvents(
+            calendarConnection.connectionKey,
+            new Date(from.getTime() - from.getTimezoneOffset() * 60000).toISOString(),
+            new Date(from.getTime() + 48 * 3600 * 1000).toISOString(),
+            50,
+          );
+          if (events.ok) {
+            const lines = events.data.map((event) => {
+              const when = event.start
+                ? event.allDay
+                  ? event.start
+                  : new Intl.DateTimeFormat("en-GB", {
+                      timeZone,
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    }).format(new Date(event.start))
+                : "sometime";
+              return `- ${when}: ${event.title}${event.location ? ` (${event.location})` : ""}`;
+            });
+            calendarNote = `\n\nCALENDAR (their Google Calendar is connected; next 48 hours, ${timeZone}):\n${
+              lines.length > 0 ? lines.join("\n") : "- nothing on the calendar"
+            }\nUse this when they ask about their day or plan. You can add events with create_calendar_event, and look further ahead with list_calendar_events. Never invent events.`;
+          }
+        } else {
+          calendarNote =
+            "\n\nCALENDAR: their Google Calendar is not connected, so you cannot see or add events. If it would help, mention they can connect it from the sidebar.";
+        }
+
         const initialRunId = getLovableAiGatewayRunId(request);
+
         const runIdFetch = createLovableAiGatewayRunIdFetch(initialRunId);
         const lovable = createOpenAI({
           baseURL: "https://ai.gateway.lovable.dev/v1",
