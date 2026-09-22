@@ -67,7 +67,7 @@ export const Route = createFileRoute("/api/chat")({
             if (part?.type !== "file") return p;
             if (part.url?.startsWith("data:") || part.url?.startsWith("http")) return p;
             return {
-              type: "text",
+              type: "text" as const,
               text: `[They shared a file earlier: ${part.filename ?? "attachment"}]`,
             };
           }),
