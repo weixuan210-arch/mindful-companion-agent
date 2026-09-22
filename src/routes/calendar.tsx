@@ -327,12 +327,27 @@ function CalendarView({ userId }: { userId: string }) {
                       +{cell.due.length - 3} more
                     </li>
                   )}
+                  {cell.events.slice(0, 2).map((event) => (
+                    <li
+                      key={event.id}
+                      title={event.title}
+                      className="truncate rounded-md border border-primary/40 px-1.5 py-0.5 text-[11px] text-foreground"
+                    >
+                      {event.label}
+                    </li>
+                  ))}
+                  {cell.events.length > 2 && (
+                    <li className="px-1.5 text-[11px] text-muted-foreground">
+                      +{cell.events.length - 2} on your calendar
+                    </li>
+                  )}
                   {cell.done.length > 0 && (
                     <li className="px-1.5 text-[11px] text-muted-foreground">
                       ✓ {cell.done.length} done
                     </li>
                   )}
                 </ul>
+
               </div>
             );
           })}
