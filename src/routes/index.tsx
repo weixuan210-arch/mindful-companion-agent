@@ -19,11 +19,14 @@ import {
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
   PromptInput,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
+  usePromptInputAttachments,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
+import { FileText, Paperclip, X } from "lucide-react";
 import {
   Tool,
   ToolContent,
@@ -79,6 +82,52 @@ const DONE_LINES = [
   "Good. Notice how that feels for a moment.",
   "That one's closed. The list is a little lighter.",
 ];
+
+// Small preview strip for files about to be sent, and the paperclip button.
+// Both must live inside <PromptInput> to reach its attachment state.
+function AttachmentChips() {
+  const attachments = usePromptInputAttachments();
+  if (attachments.files.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-2 px-3 pt-3">
+      {attachments.files.map((file) => (
+        <div
+          key={file.id}
+          className="flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs"
+        >
+          {file.mediaType?.startsWith("image/") ? (
+            <img src={file.url} alt="" className="h-8 w-8 rounded object-cover" />
+          ) : (
+            <FileText className="h-4 w-4 text-muted-foreground" />
+          )}
+          <span className="max-w-40 truncate">{file.filename}</span>
+          <button
+            type="button"
+            aria-label={`Remove ${file.filename ?? "attachment"}`}
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => attachments.remove(file.id)}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AttachButton() {
+  const attachments = usePromptInputAttachments();
+  return (
+    <PromptInputButton
+      type="button"
+      aria-label="Attach an image or PDF"
+      title="Attach an image or PDF"
+      onClick={() => attachments.openFileDialog()}
+    >
+      <Paperclip className="h-4 w-4" />
+    </PromptInputButton>
+  );
+}
 
 function Index() {
   const { session, loading } = useSession();
@@ -346,6 +395,32 @@ function ChatPanel({
                       </p>
                     );
                   }
+                  if (part.type === "file") {
+                    const filePart = part as {
+                      mediaType?: string;
+                      filename?: string;
+                      url?: string;
+                    };
+                    if (filePart.mediaType?.startsWith("image/") && filePart.url?.startsWith("data:")) {
+                      return (
+                        <img
+                          key={index}
+                          src={filePart.url}
+                          alt={filePart.filename ?? "Shared image"}
+                          className="max-h-52 rounded-lg"
+                        />
+                      );
+                    }
+                    return (
+                      <span
+                        key={index}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-background/20 px-2 py-1 text-xs"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {filePart.filename ?? "Attachment"}
+                      </span>
+                    );
+                  }
                   if (part.type.startsWith("tool-")) {
                     const toolPart = part as {
                       type: `tool-${string}`;
@@ -389,17 +464,27 @@ function ChatPanel({
 
       <div className="border-t border-border p-4">
         <PromptInput
+          accept="image/*,application/pdf"
+          multiple
+          maxFiles={5}
+          maxFileSize={15 * 1024 * 1024}
+          onError={(err) => toast.error(err.message)}
           onSubmit={(payload, event) => {
             event.preventDefault();
-            send(payload.text ?? "");
+            const text = payload.text?.trim() ?? "";
+            const files = payload.files ?? [];
+            if (!text && files.length === 0) return;
+            sendMessage({ text, files });
           }}
         >
+          <AttachmentChips />
           <PromptInputTextarea
             ref={textareaRef}
             autoFocus
             placeholder="Tell Billy anything — a thought, a worry, something you need to do..."
           />
-          <PromptInputFooter className="justify-end">
+          <PromptInputFooter className="justify-between">
+            <AttachButton />
             <PromptInputSubmit status={status} onStop={stop} />
           </PromptInputFooter>
         </PromptInput>
