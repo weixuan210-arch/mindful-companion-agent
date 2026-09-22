@@ -101,7 +101,44 @@ export const Route = createFileRoute("/api/chat")({
           filesSavedToDrive = results.filter(Boolean).length;
         }
 
+        // Today's calendar, so Billy can talk about the day without being asked.
+        const { getCalendarConnection } = await import("@/lib/calendarConnection.server");
+        const calendarConnection = await getCalendarConnection(ctx.userId);
+        let calendarNote = "";
+        if (calendarConnection) {
+          const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
+          const { listCalendarEvents } = await import("@/lib/calendar.server");
+          const from = new Date(`${dayKey}T00:00:00`);
+          const events = await listCalendarEvents(
+            calendarConnection.connectionKey,
+            new Date(from.getTime() - from.getTimezoneOffset() * 60000).toISOString(),
+            new Date(from.getTime() + 48 * 3600 * 1000).toISOString(),
+            50,
+          );
+          if (events.ok) {
+            const lines = events.data.map((event) => {
+              const when = event.start
+                ? event.allDay
+                  ? event.start
+                  : new Intl.DateTimeFormat("en-GB", {
+                      timeZone,
+                      dateStyle: "short",
+                      timeStyle: "short",
+                    }).format(new Date(event.start))
+                : "sometime";
+              return `- ${when}: ${event.title}${event.location ? ` (${event.location})` : ""}`;
+            });
+            calendarNote = `\n\nCALENDAR (their Google Calendar is connected; next 48 hours, ${timeZone}):\n${
+              lines.length > 0 ? lines.join("\n") : "- nothing on the calendar"
+            }\nUse this when they ask about their day or plan. You can add events with create_calendar_event, and look further ahead with list_calendar_events. Never invent events.`;
+          }
+        } else {
+          calendarNote =
+            "\n\nCALENDAR: their Google Calendar is not connected, so you cannot see or add events. If it would help, mention they can connect it from the sidebar.";
+        }
+
         const initialRunId = getLovableAiGatewayRunId(request);
+
         const runIdFetch = createLovableAiGatewayRunIdFetch(initialRunId);
         const lovable = createOpenAI({
           baseURL: "https://ai.gateway.lovable.dev/v1",
@@ -114,11 +151,13 @@ export const Route = createFileRoute("/api/chat")({
           model: lovable.responses("openai/gpt-6-astra"),
           system:
             buildSystemPrompt(snapshot, timeZone) +
+            calendarNote +
             (attachedCount > 0
               ? filesSavedToDrive === attachedCount
                 ? `\n\nNOTE: ${attachedCount === 1 ? "The file they just shared has" : `All ${attachedCount} files they just shared have`} been saved into their Billy folder in their Google Drive.`
                 : `\n\nNOTE: ${filesSavedToDrive} of ${attachedCount} files they just shared could be saved to their Billy Drive folder — the rest could not be kept (their Drive may not be connected). Be honest about that if it comes up.`
               : ""),
+
           messages: await convertToModelMessages(messagesForModel),
           stopWhen: stepCountIs(50),
           abortSignal: request.signal,
@@ -337,7 +376,63 @@ export const Route = createFileRoute("/api/chat")({
                 return error ? { error: error.message } : { tasks: data ?? [] };
               },
             }),
+            list_calendar_events: tool({
+              description:
+                "Look at their Google Calendar between two dates, for talking through their plan.",
+              inputSchema: z.object({
+                from: z.string().describe("Start date as YYYY-MM-DD in their local time."),
+                to: z.string().describe("End date as YYYY-MM-DD in their local time, inclusive."),
+              }),
+              execute: async ({ from, to }) => {
+                if (!calendarConnection) return { connected: false };
+                const { listCalendarEvents } = await import("@/lib/calendar.server");
+                const result = await listCalendarEvents(
+                  calendarConnection.connectionKey,
+                  new Date(`${from}T00:00:00Z`).toISOString(),
+                  new Date(new Date(`${to}T00:00:00Z`).getTime() + 86400000).toISOString(),
+                  100,
+                );
+                return result.ok
+                  ? { connected: true, events: result.data }
+                  : { connected: false, needsReconnect: result.needsReconnect };
+              },
+            }),
+            create_calendar_event: tool({
+              description:
+                "Put something on their Google Calendar. Use their local time. Only when they want it on the calendar.",
+              inputSchema: z.object({
+                title: z.string().describe("Short event title."),
+                description: z.string().nullable().describe("Extra context, or null."),
+                location: z.string().nullable().describe("Where it is, or null."),
+                start: z
+                  .string()
+                  .describe(
+                    "Start: YYYY-MM-DDTHH:mm:ss in their local time, or YYYY-MM-DD for an all-day event.",
+                  ),
+                end: z
+                  .string()
+                  .describe(
+                    "End in the same format. For an all-day event use the next day's date.",
+                  ),
+              }),
+              execute: async ({ title, description, location, start, end }) => {
+                if (!calendarConnection) return { created: false, connected: false };
+                const { createCalendarEvent } = await import("@/lib/calendar.server");
+                const result = await createCalendarEvent(calendarConnection.connectionKey, {
+                  title,
+                  description,
+                  location,
+                  start,
+                  end,
+                  timeZone,
+                });
+                return result.ok
+                  ? { created: true, event: result.data }
+                  : { created: false, needsReconnect: result.needsReconnect, error: result.message };
+              },
+            }),
           },
+
           providerOptions: {
             openai: {
               forceReasoning: true,

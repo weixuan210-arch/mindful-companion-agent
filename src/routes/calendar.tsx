@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -8,6 +9,8 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchCalendarEvents } from "@/lib/calendar.functions";
+
 import {
   computeMood,
   computeSignals,
@@ -99,8 +102,22 @@ function CalendarView({ userId }: { userId: string }) {
     },
   });
 
+  const loadEvents = useServerFn(fetchCalendarEvents);
+  const monthEnd = useMemo(
+    () => new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1),
+    [monthStart],
+  );
+  const eventsQuery = useQuery({
+    queryKey: ["calendar-events", userId, monthStart.toISOString()],
+    queryFn: () =>
+      loadEvents({ data: { from: monthStart.toISOString(), to: monthEnd.toISOString() } }),
+  });
+
   const threshold = profileQuery.data?.nudge_threshold_days ?? 5;
   const tasks = tasksQuery.data ?? [];
+  const events = eventsQuery.data?.events ?? [];
+  const calendarConnected = eventsQuery.data?.connected === true;
+
 
   const days = useMemo(() => {
     const firstWeekday = (monthStart.getDay() + 6) % 7; // Monday-first
@@ -116,6 +133,7 @@ function CalendarView({ userId }: { userId: string }) {
       date: Date | null;
       due: Task[];
       done: Task[];
+      events: { id: string; label: string; title: string }[];
       mood: MoodKey | null;
       isToday: boolean;
       isPast: boolean;
@@ -127,6 +145,7 @@ function CalendarView({ userId }: { userId: string }) {
         date: null,
         due: [],
         done: [],
+        events: [],
         mood: null,
         isToday: false,
         isPast: false,
@@ -144,6 +163,25 @@ function CalendarView({ userId }: { userId: string }) {
         (t) => t.completed_at && new Date(t.completed_at).toDateString() === dayKey,
       );
 
+      const dayEvents = events
+        .filter((event) => {
+          if (!event.start) return false;
+          const start = event.allDay
+            ? new Date(`${event.start}T00:00:00`)
+            : new Date(event.start);
+          return start.toDateString() === dayKey;
+        })
+        .map((event) => ({
+          id: event.id,
+          title: event.title,
+          label: event.allDay
+            ? event.title
+            : `${new Date(event.start as string).toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+              })} ${event.title}`,
+        }));
+
       // Billy's mood as the day closed — or right now, for today.
       const at = Math.min(endOfDay, Date.now());
       const state = isPast ? taskStateAt(tasks, at) : [];
@@ -155,6 +193,7 @@ function CalendarView({ userId }: { userId: string }) {
         date,
         due,
         done,
+        events: dayEvents,
         mood,
         isToday: dayKey === todayKey,
         isPast,
@@ -162,7 +201,8 @@ function CalendarView({ userId }: { userId: string }) {
     }
 
     return cells;
-  }, [monthStart, tasks, threshold]);
+  }, [monthStart, tasks, threshold, events]);
+
 
   const monthLabel = monthStart.toLocaleDateString(undefined, {
     month: "long",
@@ -287,12 +327,27 @@ function CalendarView({ userId }: { userId: string }) {
                       +{cell.due.length - 3} more
                     </li>
                   )}
+                  {cell.events.slice(0, 2).map((event) => (
+                    <li
+                      key={event.id}
+                      title={event.title}
+                      className="truncate rounded-md border border-primary/40 px-1.5 py-0.5 text-[11px] text-foreground"
+                    >
+                      {event.label}
+                    </li>
+                  ))}
+                  {cell.events.length > 2 && (
+                    <li className="px-1.5 text-[11px] text-muted-foreground">
+                      +{cell.events.length - 2} on your calendar
+                    </li>
+                  )}
                   {cell.done.length > 0 && (
                     <li className="px-1.5 text-[11px] text-muted-foreground">
                       ✓ {cell.done.length} done
                     </li>
                   )}
                 </ul>
+
               </div>
             );
           })}
@@ -305,7 +360,12 @@ function CalendarView({ userId }: { userId: string }) {
               {key}
             </span>
           ))}
-          <span className="ml-auto">Mood dots show how the day closed.</span>
+          <span className="ml-auto">
+            {calendarConnected
+              ? "Outlined chips are events from your Google Calendar."
+              : "Connect your Google Calendar on Billy's main screen to see events here."}
+          </span>
+
         </div>
       </section>
     </main>
