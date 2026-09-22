@@ -75,6 +75,7 @@ export const Route = createFileRoute("/api/chat")({
 
         // Persist the incoming user turn.
         const lastMessage = messages[messages.length - 1];
+        let filesSavedToDrive = 0;
         if (lastMessage?.role === "user") {
           await saveConversationTurn(ctx, [
             {
@@ -83,6 +84,20 @@ export const Route = createFileRoute("/api/chat")({
               sdk_message_id: lastMessage.id ?? null,
             },
           ]);
+
+          // Keep attachments alongside their thoughts and tasks in their Drive folder.
+          const attachments = (lastMessage.parts ?? []).filter((p) => {
+            const part = p as { type?: string; url?: string };
+            return part?.type === "file" && !!part.url?.startsWith("data:");
+          }) as { url: string; filename?: string; mediaType?: string }[];
+
+          const { mirrorFileToDrive } = await import("@/lib/drive.server");
+          const results = await Promise.all(
+            attachments.map((a) =>
+              mirrorFileToDrive(ctx, a.filename ?? "attachment", a.mediaType ?? "", a.url),
+            ),
+          );
+          filesSavedToDrive = results.filter(Boolean).length;
         }
 
         const initialRunId = getLovableAiGatewayRunId(request);
