@@ -8,7 +8,7 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/useSession";
 import { supabase } from "@/integrations/supabase/client";
-import { computeMood, computeSignals, MOOD_STYLES, type TaskLike } from "@/lib/mood";
+import { computeMood, computeSignals, MOOD_STYLES, taskStateAt, type TaskLike } from "@/lib/mood";
 
 export const Route = createFileRoute("/patterns")({
   head: () => ({
@@ -86,23 +86,56 @@ function PatternsView({ userId }: { userId: string }) {
   const signals = useMemo(() => computeSignals(tasks, threshold), [tasks, threshold]);
   const mood = useMemo(() => computeMood(signals), [signals]);
 
-  // Weekly completions for the last 6 weeks — honest history, oldest first.
-  const weeklyDone = useMemo(() => {
-    const weeks: number[] = [0, 0, 0, 0, 0, 0];
+  // Weekly trend for the last 6 weeks — oldest first. Overdue/avoided are read
+  // from how the list actually looked at the end of each week.
+  const weekly = useMemo(() => {
     const now = Date.now();
-    for (const t of tasks) {
-      if (!t.completed_at) continue;
-      const age = now - new Date(t.completed_at).getTime();
-      const week = Math.floor(age / (7 * DAY));
-      if (week >= 0 && week < 6) weeks[5 - week]! += 1;
-    }
-    return weeks;
-  }, [tasks]);
+    return Array.from({ length: 6 }, (_, i) => {
+      const weeksAgo = 5 - i;
+      const end = now - weeksAgo * 7 * DAY;
+      const start = end - 7 * DAY;
+      const state = taskStateAt(tasks, end);
+      const s = computeSignals(state, threshold, end);
+      const done = tasks.filter((t) => {
+        if (!t.completed_at) return false;
+        const at = new Date(t.completed_at).getTime();
+        return at > start && at <= end;
+      }).length;
+      return { done, overdue: s.overdue.length, avoided: s.avoided.length };
+    });
+  }, [tasks, threshold]);
+
+  // Mood, day by day, for the last three weeks.
+  const moodDays = useMemo(() => {
+    const now = Date.now();
+    return Array.from({ length: 21 }, (_, i) => {
+      const at = now - (20 - i) * DAY;
+      const s = computeSignals(taskStateAt(tasks, at), threshold, at);
+      const m = computeMood(s);
+      const drivers = [
+        ...s.avoided.slice(0, 2).map((t) => `${t.title} (${t.ageDays}d waiting)`),
+        ...s.overdue
+          .filter((o) => !s.avoided.some((a) => a.id === o.id))
+          .slice(0, 2)
+          .map((t) => `${t.title} (${t.overdueDays}d late)`),
+      ];
+      return {
+        label: new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+        mood: m,
+        drivers,
+      };
+    });
+  }, [tasks, threshold]);
+
+  const moodChanges = useMemo(
+    () => moodDays.filter((d, i) => i > 0 && d.mood.key !== moodDays[i - 1]!.mood.key),
+    [moodDays],
+  );
 
   const totalDone = useMemo(() => tasks.filter((t) => t.status === "done").length, [tasks]);
   const overdueCount = signals.overdue.length;
   const avoidedCount = signals.avoided.length;
-  const maxWeekly = Math.max(1, ...weeklyDone);
+  const maxWeekly = Math.max(1, ...weekly.flatMap((w) => [w.done, w.overdue, w.avoided]));
 
   if (tasksQuery.isLoading) {
     return (
