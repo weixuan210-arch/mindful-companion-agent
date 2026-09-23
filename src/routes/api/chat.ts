@@ -147,14 +147,22 @@ export const Route = createFileRoute("/api/chat")({
 
         const runIdFetch = createLovableAiGatewayRunIdFetch(initialRunId);
         const lovable = createOpenAI({
-          baseURL: "https://ai.gateway.lovable.dev/v1",
-          apiKey,
-          headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-          fetch: runIdFetch.fetch,
+          baseURL: localBaseURL ?? "https://ai.gateway.lovable.dev/v1",
+          apiKey: localBaseURL ? "local" : apiKey!,
+          ...(localBaseURL
+            ? {}
+            : {
+                headers: {
+                  "Lovable-API-Key": apiKey!,
+                  "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+                },
+                fetch: runIdFetch.fetch,
+              }),
         });
 
         const result = streamText({
-          model: lovable.responses("openai/gpt-6-astra"),
+          // Local models speak plain chat-completions; the cloud model uses the Responses API.
+          model: localBaseURL ? lovable.chat(localModel) : lovable.responses("openai/gpt-6-astra"),
           system:
             buildSystemPrompt(snapshot, timeZone) +
             calendarNote +
