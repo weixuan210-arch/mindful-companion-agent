@@ -447,15 +447,19 @@ export const Route = createFileRoute("/api/chat")({
             }),
           },
 
-          providerOptions: {
-            openai: {
-              forceReasoning: true,
-              reasoningEffort: "low",
-              reasoningSummary: "auto",
-              store: false,
-              include: ["reasoning.encrypted_content"],
-            },
-          },
+          ...(localBaseURL
+            ? {}
+            : {
+                providerOptions: {
+                  openai: {
+                    forceReasoning: true,
+                    reasoningEffort: "low",
+                    reasoningSummary: "auto",
+                    store: false,
+                    include: ["reasoning.encrypted_content"],
+                  },
+                },
+              }),
         });
 
         return withLovableAiGatewayRunIdHeader(
