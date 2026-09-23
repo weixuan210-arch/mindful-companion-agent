@@ -17,8 +17,14 @@ export const Route = createFileRoute("/api/chat")({
         }
         const messages = body.messages as UIMessage[];
 
+        // Local mode: set LOCAL_AI_BASE_URL (e.g. http://127.0.0.1:11434/v1) in .env to
+        // run Billy's brain on a local model (Ollama/Qwen) instead of Lovable AI.
+        const localBaseURL = process.env["LOCAL_AI_BASE_URL"];
+        const localModel = process.env["LOCAL_AI_MODEL"] ?? "qwen2.5:3b";
         const apiKey = process.env["LOVABLE_API_KEY"];
-        if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        if (!localBaseURL && !apiKey) {
+          return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        }
 
         const {
           createCompanionContext,
@@ -141,14 +147,22 @@ export const Route = createFileRoute("/api/chat")({
 
         const runIdFetch = createLovableAiGatewayRunIdFetch(initialRunId);
         const lovable = createOpenAI({
-          baseURL: "https://ai.gateway.lovable.dev/v1",
-          apiKey,
-          headers: { "Lovable-API-Key": apiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-          fetch: runIdFetch.fetch,
+          baseURL: localBaseURL ?? "https://ai.gateway.lovable.dev/v1",
+          apiKey: localBaseURL ? "local" : apiKey!,
+          ...(localBaseURL
+            ? {}
+            : {
+                headers: {
+                  "Lovable-API-Key": apiKey!,
+                  "X-Lovable-AIG-SDK": "vercel-ai-sdk",
+                },
+                fetch: runIdFetch.fetch,
+              }),
         });
 
         const result = streamText({
-          model: lovable.responses("openai/gpt-6-astra"),
+          // Local models speak plain chat-completions; the cloud model uses the Responses API.
+          model: localBaseURL ? lovable.chat(localModel) : lovable.responses("openai/gpt-6-astra"),
           system:
             buildSystemPrompt(snapshot, timeZone) +
             calendarNote +
@@ -433,15 +447,19 @@ export const Route = createFileRoute("/api/chat")({
             }),
           },
 
-          providerOptions: {
-            openai: {
-              forceReasoning: true,
-              reasoningEffort: "low",
-              reasoningSummary: "auto",
-              store: false,
-              include: ["reasoning.encrypted_content"],
-            },
-          },
+          ...(localBaseURL
+            ? {}
+            : {
+                providerOptions: {
+                  openai: {
+                    forceReasoning: true,
+                    reasoningEffort: "low",
+                    reasoningSummary: "auto",
+                    store: false,
+                    include: ["reasoning.encrypted_content"],
+                  },
+                },
+              }),
         });
 
         return withLovableAiGatewayRunIdHeader(
