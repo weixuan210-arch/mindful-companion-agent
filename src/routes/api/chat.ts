@@ -17,8 +17,14 @@ export const Route = createFileRoute("/api/chat")({
         }
         const messages = body.messages as UIMessage[];
 
+        // Local mode: set LOCAL_AI_BASE_URL (e.g. http://127.0.0.1:11434/v1) in .env to
+        // run Billy's brain on a local model (Ollama/Qwen) instead of Lovable AI.
+        const localBaseURL = process.env["LOCAL_AI_BASE_URL"];
+        const localModel = process.env["LOCAL_AI_MODEL"] ?? "qwen2.5:3b";
         const apiKey = process.env["LOVABLE_API_KEY"];
-        if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        if (!localBaseURL && !apiKey) {
+          return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        }
 
         const {
           createCompanionContext,
