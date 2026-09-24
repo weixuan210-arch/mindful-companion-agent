@@ -34,14 +34,25 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const { session, loading } = useSession();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && session) navigate({ to: "/" });
-  }, [loading, session, navigate]);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mode") === "reset" || window.location.hash.includes("type=recovery")) {
+      setMode("reset");
+    }
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setMode("reset");
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && session && mode !== "reset") navigate({ to: "/" });
+  }, [loading, session, navigate, mode]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -55,6 +66,19 @@ function AuthPage() {
         });
         if (error) throw error;
         toast.success("Almost there — check your inbox to confirm your email.");
+      } else if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth?mode=reset`,
+        });
+        if (error) throw error;
+        toast.success("Check your inbox — the link lets you set a password.");
+      } else if (mode === "reset") {
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        toast.success("Password saved. You can sign in with it anywhere now.");
+        window.history.replaceState(null, "", "/auth");
+        setMode("signin");
+        navigate({ to: "/" });
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -90,32 +114,68 @@ function AuthPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="mt-7 space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
+          {mode === "forgot" && (
+            <p className="text-sm text-muted-foreground">
+              Enter your email and we'll send a link to set a new password.
+            </p>
+          )}
+          {mode === "reset" && (
+            <p className="text-sm text-muted-foreground">Choose your new password.</p>
+          )}
+          {mode !== "reset" && (
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          )}
+          {mode !== "forgot" && (
+            <div className="space-y-2">
+              <Label htmlFor="password">{mode === "reset" ? "New password" : "Password"}</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          )}
+          {mode === "signin" && (
+            <button
+              type="button"
+              className="text-xs font-semibold text-primary underline-offset-4 hover:underline"
+              onClick={() => setMode("forgot")}
+            >
+              Forgot or never set a password?
+            </button>
+          )}
           <Button type="submit" className="w-full" disabled={busy}>
-            {mode === "signup" ? "Create my space" : "Come back in"}
+            {mode === "signup"
+              ? "Create my space"
+              : mode === "forgot"
+                ? "Send me the link"
+                : mode === "reset"
+                  ? "Save my password"
+                  : "Come back in"}
           </Button>
+          {mode === "forgot" && (
+            <button
+              type="button"
+              className="w-full text-xs text-muted-foreground underline-offset-4 hover:underline"
+              onClick={() => setMode("signin")}
+            >
+              Back to sign in
+            </button>
+          )}
         </form>
 
         <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
