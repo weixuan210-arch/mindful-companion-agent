@@ -15,7 +15,7 @@ export default defineConfig({
   vite: {
     server: {
       // Allow access through Cloudflare Tunnel quick tunnels (URL changes each run).
-      allowedHosts: [".trycloudflare.com"],
+      allowedHosts: [".trycloudflare.com", ".ts.net"],
     },
   },
 });
