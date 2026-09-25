@@ -11,13 +11,14 @@ export const Route = createFileRoute("/api/speech")({
         const text = typeof body?.text === "string" ? body.text.trim() : "";
         if (!text) return new Response("Text is required", { status: 400 });
 
+        // Local servers return whole WAV files, but some (Piper's flask server)
+        // label them text/html. Always label successful local audio as WAV so
+        // the browser decodes it instead of treating it as a cloud stream.
         const passThrough = (upstream: Response) =>
           new Response(upstream.body, {
             status: upstream.status,
             headers: {
-              "Content-Type": upstream.ok
-                ? (upstream.headers.get("Content-Type") ?? "audio/wav")
-                : "text/plain",
+              "Content-Type": upstream.ok ? "audio/wav" : "text/plain",
               "Cache-Control": "no-cache",
             },
           });
