@@ -26,7 +26,12 @@ export const Route = createFileRoute("/api/speech")({
         // Its HTTP server takes {"text": "..."} and returns a complete WAV.
         const piperUrl = process.env["LOCAL_PIPER_URL"];
         if (piperUrl) {
-          const upstream = await fetch(piperUrl, {
+          // Piper's flask server only accepts POST /synthesize; allow the env
+          // var to be the server root and normalize it here.
+          const piperEndpoint = piperUrl.replace(/\/+$/, "").endsWith("/synthesize")
+            ? piperUrl
+            : `${piperUrl.replace(/\/+$/, "")}/synthesize`;
+          const upstream = await fetch(piperEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ text: text.slice(0, 4000) }),
