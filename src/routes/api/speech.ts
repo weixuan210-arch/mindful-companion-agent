@@ -1,26 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-async function requireUser(request: Request): Promise<boolean> {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) return false;
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  return !error && !!data.user;
-}
-
 export const Route = createFileRoute("/api/speech")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const { requireUser } = await import("@/lib/request-user.server");
         if (!(await requireUser(request))) return new Response("Unauthorized", { status: 401 });
-
-        const apiKey = process.env["LOVABLE_API_KEY"];
-        if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
         const body = (await request.json().catch(() => null)) as { text?: unknown } | null;
         const text = typeof body?.text === "string" ? body.text.trim() : "";
         if (!text) return new Response("Text is required", { status: 400 });
+
+        // Local Kokoro (OpenAI-style /v1/audio/speech) when LOCAL_TTS_URL is set.
+        const localUrl = process.env["LOCAL_TTS_URL"];
+        if (localUrl) {
+          const upstream = await fetch(localUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: process.env["LOCAL_TTS_MODEL"] ?? "kokoro",
+              input: text.slice(0, 4000),
+              voice: process.env["LOCAL_TTS_VOICE"] ?? "af_heart",
+              response_format: "wav",
+            }),
+            signal: request.signal,
+          }).catch(() => null);
+          if (!upstream) return new Response("Local voice server unreachable", { status: 502 });
+          return new Response(upstream.body, {
+            status: upstream.status,
+            headers: {
+              "Content-Type": upstream.ok
+                ? (upstream.headers.get("Content-Type") ?? "audio/wav")
+                : "text/plain",
+              "Cache-Control": "no-cache",
+            },
+          });
+        }
+
+        const apiKey = process.env["LOVABLE_API_KEY"];
+        if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
         const { requestSpeech, BILLY_SPEECH } = await import("@/lib/speech.server");
         const spoken = `Say this in a warm, gentle, friendly tone: ${text.slice(0, 4000)}`;

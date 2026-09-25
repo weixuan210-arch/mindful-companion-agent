@@ -97,6 +97,14 @@ export async function transcribeRecording(file: File): Promise<string> {
   if (!response.ok || !response.body) {
     throw new Error(`Couldn't hear that (${response.status}). Try again?`);
   }
+  // Local Whisper replies with plain JSON rather than a stream.
+  if (response.headers.get("Content-Type")?.includes("application/json")) {
+    const json = (await response.json()) as { text?: string };
+    const text = (json.text ?? "").trim();
+    if (!text) throw new Error("Billy couldn't make out any words — try again?");
+    return text;
+  }
+
 
   let finalText = "";
   let streamed = "";
@@ -177,6 +185,24 @@ export async function streamSpeech(text: string, signal?: AbortSignal): Promise<
     if (!response.ok || !response.body) {
       throw new Error(`Billy lost his voice (${response.status}). Try again?`);
     }
+    // Local Kokoro returns a whole audio file — decode and play it in one go.
+    if (response.headers.get("Content-Type")?.startsWith("audio/")) {
+      const audio = await context.decodeAudioData(await response.arrayBuffer());
+      const source = context.createBufferSource();
+      source.buffer = audio;
+      source.connect(context.destination);
+      sources.add(source);
+      await new Promise<void>((resolve) => {
+        source.onended = () => {
+          sources.delete(source);
+          resolve();
+        };
+        source.start();
+      });
+      signal?.throwIfAborted();
+      return;
+    }
+
     const parser = createParser({
       onEvent(event) {
         const payload = JSON.parse(event.data) as { type: string; audio?: string; error?: unknown };

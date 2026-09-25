@@ -160,22 +160,43 @@ export const Route = createFileRoute("/api/chat")({
               }),
         });
 
+        // Lightweight local profile: small models on modest hardware need a short
+        // prompt, a sliding window of recent turns and only the core tools.
+        // Older context is fetched on demand through recall_thoughts.
+        const LOCAL_WINDOW = Number(process.env["LOCAL_AI_WINDOW"] ?? "12");
+        const LOCAL_TOOLS = ["save_thought", "recall_thoughts", "create_task", "complete_task", "list_tasks"];
+        const pickTools = <T extends Record<string, unknown>>(all: T): T =>
+          localBaseURL
+            ? (Object.fromEntries(Object.entries(all).filter(([k]) => LOCAL_TOOLS.includes(k))) as T)
+            : all;
+        const nowLocal = new Intl.DateTimeFormat("en-GB", {
+          timeZone,
+          dateStyle: "full",
+          timeStyle: "short",
+        }).format(new Date());
+        const localSystem = `You are Billy, a cosy companion: cheerful, warm and quietly wise, like a friendly dog happy to see them — never fawning, never blind praise. Keep replies short (1-4 sentences) and honest with a caring frame.
+It is ${nowLocal} (${timeZone}).
+Tools: save_thought for anything worth remembering; recall_thoughts to look up past notes, Obsidian notes or anything they mention from before (always check before saying you don't know); create_task when they want to do something; list_tasks and complete_task for their to-dos. Never invent tasks or memories.`;
+
         const result = streamText({
           // Local models speak plain chat-completions; the cloud model uses the Responses API.
           model: localBaseURL ? lovable.chat(localModel) : lovable.responses("openai/gpt-6-astra"),
-          system:
-            buildSystemPrompt(snapshot, timeZone) +
-            calendarNote +
-            (attachedCount > 0
-              ? filesSavedToDrive === attachedCount
-                ? `\n\nNOTE: ${attachedCount === 1 ? "The file they just shared has" : `All ${attachedCount} files they just shared have`} been saved into their Billy folder in their Google Drive.`
-                : `\n\nNOTE: ${filesSavedToDrive} of ${attachedCount} files they just shared could be saved to their Billy Drive folder — the rest could not be kept (their Drive may not be connected). Be honest about that if it comes up.`
-              : ""),
+          system: localBaseURL
+            ? localSystem
+            : buildSystemPrompt(snapshot, timeZone) +
+              calendarNote +
+              (attachedCount > 0
+                ? filesSavedToDrive === attachedCount
+                  ? `\n\nNOTE: ${attachedCount === 1 ? "The file they just shared has" : `All ${attachedCount} files they just shared have`} been saved into their Billy folder in their Google Drive.`
+                  : `\n\nNOTE: ${filesSavedToDrive} of ${attachedCount} files they just shared could be saved to their Billy Drive folder — the rest could not be kept (their Drive may not be connected). Be honest about that if it comes up.`
+                : ""),
 
-          messages: await convertToModelMessages(messagesForModel),
-          stopWhen: stepCountIs(50),
+          messages: await convertToModelMessages(
+            localBaseURL ? messagesForModel.slice(-LOCAL_WINDOW) : messagesForModel,
+          ),
+          stopWhen: stepCountIs(localBaseURL ? 5 : 50),
           abortSignal: request.signal,
-          tools: {
+          tools: pickTools({
             save_thought: tool({
               description:
                 "Store something the person shared worth remembering: a reflection, feeling, idea or fact about their life.",
@@ -445,7 +466,7 @@ export const Route = createFileRoute("/api/chat")({
                   : { created: false, needsReconnect: result.needsReconnect, error: result.message };
               },
             }),
-          },
+          }),
 
           ...(localBaseURL
             ? {}
