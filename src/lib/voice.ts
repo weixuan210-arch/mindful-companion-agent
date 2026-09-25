@@ -157,100 +157,145 @@ function decodePCM(pending: Uint8Array, incoming: Uint8Array) {
   return { samples, pending: bytes.slice(usable) };
 }
 
+// Split into speakable chunks so synthesis can start on a few words instead of
+// the whole message. The first chunk stays short for the fastest possible start.
+function splitForSpeech(text: string): string[] {
+  const pieces = text
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .map((piece) => piece.trim())
+    .filter(Boolean);
+  if (!pieces.length) return [];
+  const chunks: string[] = [];
+  let current = "";
+  for (const piece of pieces) {
+    const limit = chunks.length === 0 ? 90 : 220;
+    if (!current) {
+      current = piece;
+    } else if (current.length + piece.length + 1 <= limit) {
+      current = `${current} ${piece}`;
+    } else {
+      chunks.push(current);
+      current = piece;
+    }
+    if (current.length >= limit) {
+      chunks.push(current);
+      current = "";
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 export async function streamSpeech(text: string, signal?: AbortSignal): Promise<void> {
   signal?.throwIfAborted();
+  const chunks = splitForSpeech(text);
+  if (!chunks.length) return;
+
   const context = new AudioContext({ sampleRate: 24000 });
   const sources = new Set<AudioBufferSourceNode>();
   let playhead = 0;
-  let pending = new Uint8Array(0);
-  let completed = false;
-  let samplesPlayed = 0;
+  let playback: Promise<void> = Promise.resolve();
   const controller = new AbortController();
   const abort = () => {
     controller.abort(signal?.reason);
     for (const source of sources) source.stop();
   };
   signal?.addEventListener("abort", abort, { once: true });
-  let playback: Promise<void> = Promise.resolve();
-  try {
-    if (context.state === "suspended") await context.resume();
+
+  const schedule = (buffer: AudioBuffer) => {
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    sources.add(source);
+    playback = new Promise<void>((resolve) => {
+      source.onended = () => {
+        sources.delete(source);
+        resolve();
+      };
+    });
+    playhead = Math.max(playhead, context.currentTime + 0.05);
+    source.start(playhead);
+    playhead += buffer.duration;
+  };
+
+  const request = async (chunk: string) => {
     const headers = await authHeaders();
     headers.set("Content-Type", "application/json");
-    const response = await fetch("/api/speech", {
+    return fetch("/api/speech", {
       method: "POST",
       headers,
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: chunk }),
       signal: controller.signal,
     });
-    if (!response.ok || !response.body) {
-      throw new Error(`Billy lost his voice (${response.status}). Try again?`);
-    }
-    // Local Kokoro returns a whole audio file — decode and play it in one go.
-    if (response.headers.get("Content-Type")?.startsWith("audio/")) {
-      const audio = await context.decodeAudioData(await response.arrayBuffer());
-      const source = context.createBufferSource();
-      source.buffer = audio;
-      source.connect(context.destination);
-      sources.add(source);
-      await new Promise<void>((resolve) => {
-        source.onended = () => {
-          sources.delete(source);
-          resolve();
-        };
-        source.start();
-      });
-      signal?.throwIfAborted();
-      return;
-    }
+  };
 
-    const parser = createParser({
-      onEvent(event) {
-        const payload = JSON.parse(event.data) as { type: string; audio?: string; error?: unknown };
-        if (payload.type === "error" || payload.error) {
-          throw new Error(`Speech failed: ${event.data}`);
-        }
-        if (payload.type === "speech.audio.done") {
-          completed = true;
-          return;
-        }
-        if (payload.type !== "speech.audio.delta") return;
-        if (completed || !payload.audio) throw new Error("Invalid speech audio event");
-        const decoded = decodePCM(
-          pending,
-          Uint8Array.from(atob(payload.audio), (c) => c.charCodeAt(0)),
-        );
-        pending = new Uint8Array(decoded.pending);
-        if (!decoded.samples.length) return;
-        samplesPlayed += decoded.samples.length;
-        const buffer = context.createBuffer(1, decoded.samples.length, 24000);
-        buffer.copyToChannel(decoded.samples, 0);
-        const source = context.createBufferSource();
-        source.buffer = buffer;
-        source.connect(context.destination);
-        sources.add(source);
-        playback = new Promise<void>((resolve) => {
-          source.onended = () => {
-            sources.delete(source);
-            resolve();
-          };
-        });
-        playhead = Math.max(playhead, context.currentTime + 0.05);
-        source.start(playhead);
-        playhead += buffer.duration;
-      },
-    });
-    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    try {
-      while (true) {
-        const next = await reader.read();
-        if (next.done) break;
-        parser.feed(next.value);
+  try {
+    if (context.state === "suspended") await context.resume();
+    // Kick off the first chunk immediately; later chunks are fetched while
+    // earlier audio is still playing so playback never waits on synthesis.
+    let inflight = request(chunks[0]!);
+    for (let index = 0; index < chunks.length; index++) {
+      const response = await inflight;
+      if (index + 1 < chunks.length) inflight = request(chunks[index + 1]!);
+      if (!response.ok || !response.body) {
+        throw new Error(`Billy lost his voice (${response.status}). Try again?`);
       }
-      parser.reset({ consume: true });
-    } finally {
-      reader.releaseLock();
+
+      // Local Kokoro returns a complete audio file per chunk.
+      if (response.headers.get("Content-Type")?.startsWith("audio/")) {
+        const audio = await context.decodeAudioData(await response.arrayBuffer());
+        signal?.throwIfAborted();
+        schedule(audio);
+        continue;
+      }
+
+      // Cloud voice streams raw PCM deltas over server-sent events.
+      let pending = new Uint8Array(0);
+      let completed = false;
+      let samplesPlayed = 0;
+      const parser = createParser({
+        onEvent(event) {
+          const payload = JSON.parse(event.data) as {
+            type: string;
+            audio?: string;
+            error?: unknown;
+          };
+          if (payload.type === "error" || payload.error) {
+            throw new Error(`Speech failed: ${event.data}`);
+          }
+          if (payload.type === "speech.audio.done") {
+            completed = true;
+            return;
+          }
+          if (payload.type !== "speech.audio.delta") return;
+          if (completed || !payload.audio) throw new Error("Invalid speech audio event");
+          const decoded = decodePCM(
+            pending,
+            Uint8Array.from(atob(payload.audio), (c) => c.charCodeAt(0)),
+          );
+          pending = new Uint8Array(decoded.pending);
+          if (!decoded.samples.length) return;
+          samplesPlayed += decoded.samples.length;
+          const buffer = context.createBuffer(1, decoded.samples.length, 24000);
+          buffer.copyToChannel(decoded.samples, 0);
+          schedule(buffer);
+        },
+      });
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          parser.feed(next.value);
+        }
+        parser.reset({ consume: true });
+      } finally {
+        reader.releaseLock();
+      }
+      if (!completed || !samplesPlayed || pending.length) {
+        throw new Error("Incomplete speech stream");
+      }
     }
-    if (!completed || !samplesPlayed || pending.length) throw new Error("Incomplete speech stream");
     await playback;
     signal?.throwIfAborted();
   } finally {
@@ -260,3 +305,4 @@ export async function streamSpeech(text: string, signal?: AbortSignal): Promise<
     await context.close();
   }
 }
+
