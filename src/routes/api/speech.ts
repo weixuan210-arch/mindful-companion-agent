@@ -11,6 +11,31 @@ export const Route = createFileRoute("/api/speech")({
         const text = typeof body?.text === "string" ? body.text.trim() : "";
         if (!text) return new Response("Text is required", { status: 400 });
 
+        const passThrough = (upstream: Response) =>
+          new Response(upstream.body, {
+            status: upstream.status,
+            headers: {
+              "Content-Type": upstream.ok
+                ? (upstream.headers.get("Content-Type") ?? "audio/wav")
+                : "text/plain",
+              "Cache-Control": "no-cache",
+            },
+          });
+
+        // Piper first: tiny, near-instant synthesis on low-power hardware.
+        // Its HTTP server takes {"text": "..."} and returns a complete WAV.
+        const piperUrl = process.env["LOCAL_PIPER_URL"];
+        if (piperUrl) {
+          const upstream = await fetch(piperUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: text.slice(0, 4000) }),
+            signal: request.signal,
+          }).catch(() => null);
+          if (upstream?.ok) return passThrough(upstream);
+          // Otherwise fall through to Kokoro / cloud below.
+        }
+
         // Local Kokoro (OpenAI-style /v1/audio/speech) when LOCAL_TTS_URL is set.
         const localUrl = process.env["LOCAL_TTS_URL"];
         if (localUrl) {
@@ -26,16 +51,9 @@ export const Route = createFileRoute("/api/speech")({
             signal: request.signal,
           }).catch(() => null);
           if (!upstream) return new Response("Local voice server unreachable", { status: 502 });
-          return new Response(upstream.body, {
-            status: upstream.status,
-            headers: {
-              "Content-Type": upstream.ok
-                ? (upstream.headers.get("Content-Type") ?? "audio/wav")
-                : "text/plain",
-              "Cache-Control": "no-cache",
-            },
-          });
+          return passThrough(upstream);
         }
+
 
         const apiKey = process.env["LOVABLE_API_KEY"];
         if (!apiKey) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
